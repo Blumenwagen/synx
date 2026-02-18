@@ -1,0 +1,1739 @@
+#!/usr/bin/env fish
+
+# ╔═══════════════════════════════════════════════════════════╗
+# ║  SYNX - Dotfile Synchronization Utility                  ║
+# ╚═══════════════════════════════════════════════════════════╝
+
+# Configuration
+set DOTFILES_DIR "$HOME/dotfiles"
+set CONFIG_DIR "$HOME/.config"
+set SYNX_CONFIG "$HOME/.config/synx/synx.conf"
+set SYNX_EXCLUDE "$HOME/.config/synx/exclude.conf"
+set SYNX_BOOTSTRAP "$HOME/.config/synx/bootstrap.conf"
+set TARGETS
+set EXCLUDES
+set -g BOOTSTRAP_YES 0
+
+# Color definitions
+set -l RESET (set_color normal)
+set -l BOLD (set_color --bold)
+set -l DIM (set_color brblack)
+set -l CYAN (set_color cyan)
+set -l GREEN (set_color green)
+set -l YELLOW (set_color yellow)
+set -l RED (set_color red)
+set -l BLUE (set_color blue)
+set -l MAGENTA (set_color magenta)
+
+# Spinner animation
+set -l SPINNER_FRAMES "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏"
+
+function spinner
+    set -l message $argv[1]
+    set -l pid $argv[2]
+    
+    set -l i 1
+    while kill -0 $pid 2>/dev/null
+        set -l frame $SPINNER_FRAMES[$i]
+        printf "\r  $CYAN$frame$RESET $message"
+        set i (math "($i % "(count $SPINNER_FRAMES)") + 1")
+        sleep 0.1
+    end
+    printf "\r"
+end
+
+function load_targets
+    # Ensure config exists
+    if not test -f "$SYNX_CONFIG"
+        mkdir -p (dirname "$SYNX_CONFIG")
+        # Create default config
+        echo "hypr\nfoot\nkitty\nfastfetch\nalacritty" > "$SYNX_CONFIG"
+    end
+    
+    # Load targets from config (skip empty lines and comments)
+    set -g TARGETS (grep -v '^#' "$SYNX_CONFIG" | grep -v '^$')
+end
+
+function load_excludes
+    # Ensure exclude config exists
+    if not test -f "$SYNX_EXCLUDE"
+        mkdir -p (dirname "$SYNX_EXCLUDE")
+        echo "# Exclude patterns for machine-specific files\n# One pattern per line\n" > "$SYNX_EXCLUDE"
+    end
+    
+    # Load exclude patterns (skip empty lines and comments)
+    set -g EXCLUDES (grep -v '^#' "$SYNX_EXCLUDE" | grep -v '^$')
+end
+
+function is_excluded
+    set -l file_path $argv[1]
+    
+    # No excludes means nothing is excluded
+    if test (count $EXCLUDES) -eq 0
+        return 1
+    end
+    
+    # Check if file matches any exclude pattern
+    for pattern in $EXCLUDES
+        # Exact/glob match (e.g. pattern "hypr/monitors.conf" or "*.local")
+        if string match -q "$pattern" "$file_path"
+            return 0
+        end
+        
+        # Pattern as a directory prefix (e.g. pattern "hypr/local" matches "hypr/local/foo.conf")
+        if string match -q "$pattern/*" "$file_path"
+            return 0
+        end
+        
+        # Pattern as a filename suffix (e.g. pattern "monitors.conf" matches "hypr/monitors.conf")
+        # Only do this for patterns without path separators (bare filenames/globs)
+        if not string match -q '*/*' "$pattern"
+            if string match -q "*/$pattern" "$file_path"
+                return 0
+            end
+        end
+    end
+    
+    return 1
+end
+
+function list_dotfiles
+    echo
+    echo "$CYAN$BOLD╭─────────────────────────────────────╮$RESET"
+    echo "$CYAN$BOLD│$RESET  📋 $BOLD"SYNX"$RESET - List Dotfiles    $CYAN$BOLD│$RESET"
+    echo "$CYAN$BOLD╰─────────────────────────────────────╯$RESET"
+    echo
+    
+    load_targets
+    
+    echo "$BOLD"TRACKED DOTFILES:"$RESET"
+    if test (count $TARGETS) -eq 0
+        echo "  $DIM(none)$RESET"
+    else
+        for target in $TARGETS
+            if test -L "$CONFIG_DIR/$target"
+                echo "  $GREEN✓$RESET $target $DIM(symlink)$RESET"
+            else if test -e "$CONFIG_DIR/$target"
+                echo "  $GREEN✓$RESET $target"
+            else
+                echo "  $RED✗$RESET $target $DIM(not found)$RESET"
+            end
+        end
+    end
+    
+    echo
+    echo "$BOLD"AVAILABLE DOTFILES:"$RESET"
+    
+    # Find dotfiles in .config that aren't tracked
+    set -l available
+    for item in $CONFIG_DIR/*
+        set -l basename (basename $item)
+        if not contains $basename $TARGETS
+            set available $available $basename
+        end
+    end
+    
+    if test (count $available) -eq 0
+        echo "  $DIM(all tracked)$RESET"
+    else
+        for item in $available[1..10]  # Show first 10
+            if test -L "$CONFIG_DIR/$item"
+                echo "  $DIM○$RESET $item $DIM(symlink)$RESET"
+            else if test -d "$CONFIG_DIR/$item"
+                echo "  $DIM○$RESET $item"
+            end
+        end
+        if test (count $available) -gt 10
+            echo "  $DIM... and "(math (count $available) - 10)" more$RESET"
+        end
+    end
+    echo
+    echo "$DIM"Hint: Use 'synx --add <name>' to track a dotfile"$RESET"
+    echo
+end
+
+function add_target
+    set -l target $argv[1]
+    
+    if test -z "$target"
+        echo "$RED✗$RESET Error: No dotfile specified"
+        echo "  Usage: synx --add <dotfile>"
+        exit 1
+    end
+    
+    load_targets
+    
+    if contains $target $TARGETS
+        echo "$YELLOW⚠$RESET  '$target' is already tracked"
+        exit 0
+    end
+    
+    if not test -e "$CONFIG_DIR/$target"
+        echo "$YELLOW⚠$RESET  Warning: '$target' not found in $CONFIG_DIR"
+        read -P "  Add anyway? [y/N] " -n 1 confirm
+        echo
+        if test "$confirm" != "y" -a "$confirm" != "Y"
+            echo "  Cancelled"
+            exit 0
+        end
+    end
+    
+    echo $target >> "$SYNX_CONFIG"
+    echo "$GREEN✓$RESET Added '$target' to tracked dotfiles"
+end
+
+function remove_target
+    set -l target $argv[1]
+    
+    if test -z "$target"
+        echo "$RED✗$RESET Error: No dotfile specified"
+        echo "  Usage: synx --remove <dotfile>"
+        exit 1
+    end
+    
+    load_targets
+    
+    if not contains $target $TARGETS
+        echo "$YELLOW⚠$RESET  '$target' is not tracked"
+        exit 0
+    end
+    
+    # Remove from config file
+    grep -v "^$target\$" "$SYNX_CONFIG" > "$SYNX_CONFIG.tmp"
+    mv "$SYNX_CONFIG.tmp" "$SYNX_CONFIG"
+    
+    echo "$GREEN✓$RESET Removed '$target' from tracked dotfiles"
+end
+
+function add_exclude
+    set -l pattern $argv[1]
+    
+    if test -z "$pattern"
+        echo "$RED✗$RESET Error: No pattern specified"
+        echo "  Usage: synx --exclude <pattern>"
+        echo "  Example: synx --exclude hypr/monitors.conf"
+        exit 1
+    end
+    
+    load_excludes
+    
+    # Check if already excluded
+    if contains $pattern $EXCLUDES
+        echo "$YELLOW⚠$RESET  '$pattern' is already excluded"
+        exit 0
+    end
+    
+    # Add to exclude config
+    echo $pattern >> "$SYNX_EXCLUDE"
+    echo "$GREEN✓$RESET Added '$pattern' to exclude patterns"
+    
+    # Remove from git repo if exists
+    if not test -d "$DOTFILES_DIR/.git"
+        echo "$YELLOW⚠$RESET  No git repo found, skipping removal from repo"
+        exit 0
+    end
+    
+    cd $DOTFILES_DIR
+    
+    # Find and remove matching files from git
+    set -l removed 0
+    for file in (git ls-files)
+        if is_excluded $file
+            git rm --cached "$file" >/dev/null 2>&1
+            if test $status -eq 0
+                echo "  $BLUE✓$RESET Removed from repo: $file"
+                set removed (math $removed + 1)
+            end
+        end
+    end
+    
+    if test $removed -gt 0
+        # Commit the removal
+        git commit -m "Exclude: $pattern" --quiet 2>/dev/null
+        echo "$GREEN✓$RESET Committed exclusion ($removed file(s) removed)"
+        echo
+        echo "$DIM"Note: Run 'synx' to push changes"$RESET"
+    else
+        echo "$DIM  No matching files in repo to remove$RESET"
+    end
+end
+
+function show_history
+    echo
+    echo "$CYAN$BOLD╭─────────────────────────────────────╮$RESET"
+    echo "$CYAN$BOLD│$RESET  📜 $BOLD"SYNX"$RESET - Sync History     $CYAN$BOLD│$RESET"
+    echo "$CYAN$BOLD╰─────────────────────────────────────╯$RESET"
+    echo
+    
+    if not test -d "$DOTFILES_DIR/.git"
+        echo "$RED✗$RESET Error: $DOTFILES_DIR is not a git repository."
+        exit 1
+    end
+    
+    cd $DOTFILES_DIR
+    
+    set -l commits (git log --oneline -n 20 --pretty=format:"%h|%ar|%s")
+    
+    if test (count $commits) -eq 0
+        echo "$DIM  No history yet$RESET"
+        echo
+        exit 0
+    end
+    
+    set -l i 1
+    for commit in $commits
+        set -l hash (echo $commit | cut -d'|' -f1)
+        set -l time (echo $commit | cut -d'|' -f2)
+        set -l msg (echo $commit | cut -d'|' -f3)
+        
+        echo "$DIM"(printf "%2d" $i)". $RESET$CYAN$hash$RESET $DIM$time$RESET"
+        echo "    $msg"
+        
+        set i (math $i + 1)
+    end
+    
+    echo
+    echo "$DIM"Hint: Use 'synx --rollback <n>' to restore to commit n"$RESET"
+    echo
+end
+
+function rollback_dotfiles
+    set -l steps $argv[1]
+    
+    if test -z "$steps"
+        echo "$RED✗$RESET Error: No rollback count specified"
+        echo "  Usage: synx --rollback <n>"
+        exit 1
+    end
+    
+    if not string match -qr '^[0-9]+$' $steps
+        echo "$RED✗$RESET Error: Rollback count must be a number"
+        exit 1
+    end
+    
+    if not test -d "$DOTFILES_DIR/.git"
+        echo "$RED✗$RESET Error: $DOTFILES_DIR is not a git repository."
+        exit 1
+    end
+    
+    echo
+    echo "$YELLOW$BOLD⚠  WARNING$RESET"
+    echo "  This will reset your dotfiles repo to $steps commit(s) ago."
+    echo "  Current changes will be lost."
+    echo
+    
+    cd $DOTFILES_DIR
+    
+    # Show the target commit
+    set -l target_commit (git log --oneline -n (math $steps + 1) | tail -n 1 | cut -d' ' -f1)
+    set -l target_msg (git log --oneline -n (math $steps + 1) | tail -n 1 | cut -d' ' -f2-)
+    
+    echo "  Target: $CYAN$target_commit$RESET $target_msg"
+    echo
+    
+    read -P "  Continue? [y/N] " -n 1 confirm
+    echo
+    
+    if test "$confirm" != "y" -a "$confirm" != "Y"
+        echo "  Cancelled"
+        exit 0
+    end
+    
+    echo
+    echo "$BLUE$BOLD→$RESET Rolling back $steps commit(s)..."
+    echo
+    
+    if git reset --hard HEAD~$steps >/dev/null 2>&1
+        echo "  $GREEN✓$RESET Rolled back to $CYAN$target_commit$RESET"
+        echo
+        echo "$BLUE$BOLD→$RESET Restoring dotfiles to ~/.config..."
+        echo
+        
+        # Run restore
+        load_targets
+        restore_dotfiles
+    else
+        echo "  $RED✗$RESET Rollback failed"
+        exit 1
+    end
+end
+
+function show_help
+    echo
+    echo "$CYAN$BOLD╭─────────────────────────────────────╮$RESET"
+    echo "$CYAN$BOLD│$RESET  🚀 $BOLD"SYNX"$RESET - Dotfile Sync       $CYAN$BOLD│$RESET"
+    echo "$CYAN$BOLD╰─────────────────────────────────────╯$RESET"
+    echo
+    echo "$BOLD"USAGE:"$RESET"
+    echo "  synx [OPTIONS]"
+    echo
+    echo "$BOLD"OPTIONS:"$RESET"
+    echo "  $GREEN-h, --help$RESET              Show this help message"
+    echo "  $GREEN-r, --restore$RESET           Restore dotfiles from remote repository"
+    echo "  $GREEN--add <name>$RESET            Add a dotfile to track"
+    echo "  $GREEN--remove <name>$RESET         Remove a dotfile from tracking"
+    echo "  $GREEN--exclude <pattern>$RESET     Add exclude pattern and remove from repo"
+    echo "  $GREEN--list$RESET                  List tracked and available dotfiles"
+    echo "  $GREEN--history$RESET               Show sync history"
+    echo "  $GREEN--rollback <n>$RESET          Rollback to n commits ago"
+    echo
+    echo "$BOLD"BOOTSTRAP:"$RESET"
+    echo "  $GREEN--bootstrap-setup$RESET       Create bootstrap config interactively"
+    echo "  $GREEN--bootstrap$RESET             Run bootstrap from local config"
+    echo "  $GREEN--bootstrap <url>$RESET       Clone repo, review config, then bootstrap"
+    echo "  $GREEN--bootstrap --yes$RESET       Skip per-step confirmations"
+    echo
+    echo "$BOLD"DESCRIPTION:"$RESET"
+    echo "  Synchronizes your dotfiles between ~/.config and ~/dotfiles,"
+    echo "  automatically commits changes, and pushes to GitHub."
+    echo
+    echo "$BOLD"TRACKED DOTFILES:"$RESET"
+    for target in $TARGETS
+        echo "  $DIM•$RESET $target"
+    end
+    echo
+end
+
+# ═══════════════════════════════════════════════════════════
+#  BOOTSTRAP SYSTEM
+# ═══════════════════════════════════════════════════════════
+
+function bootstrap_confirm
+    set -l message $argv[1]
+    
+    if test $BOOTSTRAP_YES -eq 1
+        return 0
+    end
+    
+    read -P "  $message [y/N] " -n 1 confirm
+    echo
+    if test "$confirm" = "y" -o "$confirm" = "Y"
+        return 0
+    end
+    return 1
+end
+
+# ── Config Parser ──
+# Reads bootstrap.conf and sets global variables for each section
+
+function parse_bootstrap_config
+    set -l config_file $argv[1]
+    
+    if not test -f "$config_file"
+        return 1
+    end
+    
+    set -g BS_AUR_HELPER ""
+    set -g BS_PACKAGES
+    set -g BS_REPOS
+    set -g BS_DM_NAME ""
+    set -g BS_DM_THEME ""
+    set -g BS_DM_THEME_SOURCE ""
+    set -g BS_DOTFILES_RESTORE 0
+    set -g BS_COMMANDS
+    
+    set -l current_section ""
+    
+    for line in (cat "$config_file")
+        # Skip comments and empty lines
+        set -l trimmed (string trim "$line")
+        if test -z "$trimmed"; or string match -q '#*' "$trimmed"
+            continue
+        end
+        
+        # Section headers
+        if string match -qr '^\[(.+)\]$' "$trimmed"
+            set current_section (string match -r '^\[(.+)\]$' "$trimmed")[2]
+            continue
+        end
+        
+        # Key-value pairs
+        switch $current_section
+            case aur
+                if string match -q 'helper = *' "$trimmed"
+                    set -g BS_AUR_HELPER (string replace 'helper = ' '' "$trimmed")
+                end
+            case packages
+                if string match -q 'list = *' "$trimmed"
+                    # First line with key
+                    set -l pkgs (string replace 'list = ' '' "$trimmed")
+                    for pkg in (string split ' ' "$pkgs")
+                        set -l p (string trim "$pkg")
+                        if test -n "$p"
+                            set -g BS_PACKAGES $BS_PACKAGES $p
+                        end
+                    end
+                else
+                    # Continuation line (indented package list)
+                    for pkg in (string split ' ' "$trimmed")
+                        set -l p (string trim "$pkg")
+                        if test -n "$p"
+                            set -g BS_PACKAGES $BS_PACKAGES $p
+                        end
+                    end
+                end
+            case repos
+                if string match -q 'repo = *' "$trimmed"
+                    set -l repo_line (string replace 'repo = ' '' "$trimmed")
+                    set -g BS_REPOS $BS_REPOS "$repo_line"
+                end
+            case dm
+                if string match -q 'name = *' "$trimmed"
+                    set -g BS_DM_NAME (string replace 'name = ' '' "$trimmed")
+                end
+                if string match -q 'theme = *' "$trimmed"
+                    set -g BS_DM_THEME (string replace 'theme = ' '' "$trimmed")
+                end
+                if string match -q 'theme_source = *' "$trimmed"
+                    set -g BS_DM_THEME_SOURCE (string replace 'theme_source = ' '' "$trimmed")
+                end
+            case dotfiles
+                if string match -q 'restore = true' "$trimmed"
+                    set -g BS_DOTFILES_RESTORE 1
+                end
+            case commands
+                if string match -q 'run = *' "$trimmed"
+                    set -l cmd (string replace 'run = ' '' "$trimmed")
+                    set -g BS_COMMANDS $BS_COMMANDS "$cmd"
+                end
+        end
+    end
+    
+    return 0
+end
+
+# ── Display Config ──
+
+function show_bootstrap_config
+    set -l config_file $argv[1]
+    
+    echo "$BOLD"BOOTSTRAP CONFIGURATION:"$RESET"
+    echo "$DIM─────────────────────────────────────$RESET"
+    echo
+    
+    if test -n "$BS_AUR_HELPER"
+        echo "  $CYAN▸$RESET AUR Helper:  $BOLD$BS_AUR_HELPER$RESET"
+    end
+    
+    if test (count $BS_PACKAGES) -gt 0
+        echo "  $CYAN▸$RESET Packages:    $BOLD"(count $BS_PACKAGES)"$RESET packages"
+        for pkg in $BS_PACKAGES
+            echo "    $DIM•$RESET $pkg"
+        end
+    end
+    
+    if test (count $BS_REPOS) -gt 0
+        echo "  $CYAN▸$RESET Repositories:"
+        for repo_entry in $BS_REPOS
+            set -l parts (string split ' | ' "$repo_entry")
+            set -l url $parts[1]
+            set -l dest ""
+            set -l cmd ""
+            if test (count $parts) -ge 2
+                set dest $parts[2]
+            end
+            if test (count $parts) -ge 3
+                set cmd $parts[3]
+            end
+            echo "    $DIM•$RESET $url"
+            if test -n "$dest"
+                echo "      $DIM→ $dest$RESET"
+            end
+            if test -n "$cmd"
+                echo "      $DIM⚡ $cmd$RESET"
+            end
+        end
+    end
+    
+    if test -n "$BS_DM_NAME"
+        echo "  $CYAN▸$RESET DM:          $BOLD$BS_DM_NAME$RESET"
+        if test -n "$BS_DM_THEME"
+            echo "    $DIM•$RESET Theme: $BS_DM_THEME"
+        end
+        if test -n "$BS_DM_THEME_SOURCE"
+            echo "    $DIM•$RESET Source: $BS_DM_THEME_SOURCE"
+        end
+    end
+    
+    if test $BS_DOTFILES_RESTORE -eq 1
+        echo "  $CYAN▸$RESET Dotfiles:    $GREEN"restore after setup"$RESET"
+    end
+    
+    if test (count $BS_COMMANDS) -gt 0
+        echo "  $CYAN▸$RESET Commands:"
+        for cmd in $BS_COMMANDS
+            echo "    $DIM\$$RESET $cmd"
+        end
+    end
+    
+    echo
+    echo "$DIM─────────────────────────────────────$RESET"
+end
+
+# ── Review & Edit Config ──
+
+function review_bootstrap_config
+    set -l config_file $argv[1]
+    
+    echo
+    echo "$CYAN$BOLD╭─────────────────────────────────────╮$RESET"
+    echo "$CYAN$BOLD│$RESET  📋 $BOLD"SYNX"$RESET - Review Bootstrap  $CYAN$BOLD│$RESET"
+    echo "$CYAN$BOLD╰─────────────────────────────────────╯$RESET"
+    echo
+    
+    # Parse and show config
+    parse_bootstrap_config "$config_file"
+    show_bootstrap_config "$config_file"
+    
+    echo
+    echo "$BOLD"OPTIONS:"$RESET"
+    echo "  $GREEN"e"$RESET  Edit config in \$EDITOR"
+    echo "  $GREEN"c"$RESET  Continue with this config"
+    echo "  $GREEN"q"$RESET  Quit"
+    echo
+    
+    while true
+        read -P "  $CYAN▸$RESET Choose an option: " -n 1 choice
+        echo
+        
+        switch $choice
+            case e E
+                # Open in editor
+                set -l editor $EDITOR
+                if test -z "$editor"
+                    set editor nano
+                end
+                
+                $editor "$config_file"
+                
+                # Re-parse after edit
+                echo
+                echo "$BLUE$BOLD→$RESET Config updated. New configuration:"
+                echo
+                parse_bootstrap_config "$config_file"
+                show_bootstrap_config "$config_file"
+                echo
+                echo "$BOLD"OPTIONS:"$RESET"
+                echo "  $GREEN"e"$RESET  Edit config in \$EDITOR"
+                echo "  $GREEN"c"$RESET  Continue with this config"
+                echo "  $GREEN"q"$RESET  Quit"
+                echo
+                
+            case c C
+                return 0
+            case q Q
+                echo "  Cancelled"
+                exit 0
+            case '*'
+                echo "  $DIM(press e, c, or q)$RESET"
+        end
+    end
+end
+
+# ═══════════════════════════════════════════════════════════
+#  BOOTSTRAP SETUP WIZARD
+# ═══════════════════════════════════════════════════════════
+
+function bootstrap_setup
+    echo
+    echo "$CYAN$BOLD╭─────────────────────────────────────╮$RESET"
+    echo "$CYAN$BOLD│$RESET  🔧 $BOLD"SYNX"$RESET - Bootstrap Setup   $CYAN$BOLD│$RESET"
+    echo "$CYAN$BOLD╰─────────────────────────────────────╯$RESET"
+    echo
+    echo "  This wizard will create your bootstrap configuration."
+    echo "  The config will be saved and synced with your dotfiles."
+    echo
+    
+    mkdir -p (dirname "$SYNX_BOOTSTRAP")
+    
+    set -l config_lines
+    
+    # ── Step 1: AUR Helper ──
+    echo "$BLUE$BOLD→$RESET Step 1: AUR Helper"
+    echo
+    
+    # Detect existing AUR helpers
+    set -l detected ""
+    for helper in paru yay pikaur trizen
+        if command -v $helper >/dev/null 2>&1
+            set detected $helper
+            break
+        end
+    end
+    
+    if test -n "$detected"
+        echo "  $GREEN✓$RESET Detected: $BOLD$detected$RESET"
+        echo
+        read -P "  Use $detected as your AUR helper? [Y/n] " -n 1 use_detected
+        echo
+        if test "$use_detected" != "n" -a "$use_detected" != "N"
+            set config_lines $config_lines "# AUR Helper" "[aur]" "helper = $detected" ""
+        else
+            read -P "  Enter preferred AUR helper (paru/yay): " aur_choice
+            echo
+            if test -n "$aur_choice"
+                set config_lines $config_lines "# AUR Helper" "[aur]" "helper = $aur_choice" ""
+            end
+        end
+    else
+        echo "  $YELLOW○$RESET No AUR helper detected"
+        echo
+        read -P "  Which AUR helper to install? (paru/yay/skip): " aur_choice
+        echo
+        if test "$aur_choice" != "skip" -a -n "$aur_choice"
+            set config_lines $config_lines "# AUR Helper" "[aur]" "helper = $aur_choice" ""
+        end
+    end
+    
+    # ── Step 2: Packages ──
+    echo "$BLUE$BOLD→$RESET Step 2: Packages"
+    echo
+    echo "  Enter packages to install (space-separated)."
+    echo "  Press Enter on an empty line when done."
+    echo
+    
+    set -l all_packages
+    while true
+        read -P "  $DIM▸$RESET " pkg_line
+        if test -z "$pkg_line"
+            break
+        end
+        for pkg in (string split ' ' "$pkg_line")
+            set -l p (string trim "$pkg")
+            if test -n "$p"
+                set all_packages $all_packages $p
+            end
+        end
+    end
+    echo
+    
+    if test (count $all_packages) -gt 0
+        set config_lines $config_lines "# Packages" "[packages]"
+        set -l pkg_str (string join ' ' $all_packages)
+        set config_lines $config_lines "list = $pkg_str" ""
+    end
+    
+    # ── Step 3: Git Repos ──
+    echo "$BLUE$BOLD→$RESET Step 3: Git Repositories"
+    echo
+    echo "  Add git repos to clone (with optional install scripts)."
+    echo "  Press Enter on an empty URL to finish."
+    echo
+    
+    set -l repos_added 0
+    set -l repo_lines
+    
+    while true
+        read -P "  Git URL: " repo_url
+        if test -z "$repo_url"
+            break
+        end
+        
+        read -P "  Clone to (e.g. ~/caelestia): " repo_dest
+        read -P "  Install command (e.g. ./install.sh, or skip): " repo_cmd
+        echo
+        
+        if test -z "$repo_dest"
+            set repo_dest "~/"(basename "$repo_url" .git)
+        end
+        
+        if test "$repo_cmd" = "skip" -o -z "$repo_cmd"
+            set repo_lines $repo_lines "repo = $repo_url | $repo_dest"
+        else
+            set repo_lines $repo_lines "repo = $repo_url | $repo_dest | $repo_cmd"
+        end
+        
+        set repos_added (math $repos_added + 1)
+        echo "  $GREEN✓$RESET Added repo #$repos_added"
+        echo
+    end
+    
+    if test (count $repo_lines) -gt 0
+        set config_lines $config_lines "# Git Repositories" "[repos]"
+        for rl in $repo_lines
+            set config_lines $config_lines "$rl"
+        end
+        set config_lines $config_lines ""
+    end
+    
+    # ── Step 4: Display Manager ──
+    echo "$BLUE$BOLD→$RESET Step 4: Display Manager"
+    echo
+    echo "  Common choices: sddm, gdm, ly, greetd, lightdm"
+    echo
+    read -P "  Which DM to install? (or skip): " dm_choice
+    echo
+    
+    if test "$dm_choice" != "skip" -a -n "$dm_choice"
+        set config_lines $config_lines "# Display Manager" "[dm]" "name = $dm_choice"
+        
+        read -P "  Theme package name? (e.g. sddm-sugar-dark, or skip): " dm_theme
+        echo
+        
+        if test "$dm_theme" != "skip" -a -n "$dm_theme"
+            set config_lines $config_lines "theme = $dm_theme"
+            
+            echo "  Where to get the theme from?"
+            echo "    $DIM"1"$RESET  AUR / pacman package (default)"
+            echo "    $DIM"2"$RESET  Git repo URL"
+            echo
+            read -P "  Choice [1]: " theme_source_choice
+            echo
+            
+            if test "$theme_source_choice" = "2"
+                read -P "  Git URL for theme: " theme_git_url
+                if test -n "$theme_git_url"
+                    set config_lines $config_lines "theme_source = $theme_git_url"
+                end
+            end
+        end
+        
+        set config_lines $config_lines ""
+    end
+    
+    # ── Step 5: Dotfile Restore ──
+    echo "$BLUE$BOLD→$RESET Step 5: Dotfile Restore"
+    echo
+    read -P "  Restore dotfiles after bootstrap? [Y/n] " restore_choice
+    echo
+    
+    if test "$restore_choice" != "n" -a "$restore_choice" != "N"
+        set config_lines $config_lines "# Dotfile Restore" "[dotfiles]" "restore = true" ""
+    end
+    
+    # ── Step 6: Custom Commands ──
+    echo "$BLUE$BOLD→$RESET Step 6: Custom Commands"
+    echo
+    echo "  Add commands to run after setup (e.g. chsh, systemctl enable)."
+    echo "  Press Enter on an empty line when done."
+    echo
+    
+    set -l cmd_lines
+    while true
+        read -P "  $DIM\$$RESET " cmd_input
+        if test -z "$cmd_input"
+            break
+        end
+        set cmd_lines $cmd_lines "$cmd_input"
+    end
+    echo
+    
+    if test (count $cmd_lines) -gt 0
+        set config_lines $config_lines "# Custom Commands" "[commands]"
+        for cl in $cmd_lines
+            set config_lines $config_lines "run = $cl"
+        end
+        set config_lines $config_lines ""
+    end
+    
+    # ── Write Config ──
+    echo "$BLUE$BOLD→$RESET Writing bootstrap config..."
+    echo
+    
+    # Write header + all lines
+    echo "# ╔═══════════════════════════════════════════╗" > "$SYNX_BOOTSTRAP"
+    echo "# ║  SYNX Bootstrap Configuration             ║" >> "$SYNX_BOOTSTRAP"
+    echo "# ╚═══════════════════════════════════════════╝" >> "$SYNX_BOOTSTRAP"
+    echo "" >> "$SYNX_BOOTSTRAP"
+    
+    for line in $config_lines
+        echo "$line" >> "$SYNX_BOOTSTRAP"
+    end
+    
+    echo "  $GREEN✓$RESET Saved to $DIM$SYNX_BOOTSTRAP$RESET"
+    echo
+    
+    # Copy to dotfiles repo if it exists
+    if test -d "$DOTFILES_DIR/.git"
+        mkdir -p "$DOTFILES_DIR/.synx"
+        cp "$SYNX_BOOTSTRAP" "$DOTFILES_DIR/.synx/bootstrap.conf"
+        echo "  $GREEN✓$RESET Copied to dotfiles repo $DIM(.synx/bootstrap.conf)$RESET"
+        echo
+        echo "$DIM  Run 'synx' to push config to remote$RESET"
+    end
+    
+    echo
+    echo "$GREEN$BOLD✓$RESET  Bootstrap setup complete!"
+    echo "  Run $CYAN"synx --bootstrap"$RESET to execute it."
+    echo
+end
+
+# ═══════════════════════════════════════════════════════════
+#  BOOTSTRAP RUNNER
+# ═══════════════════════════════════════════════════════════
+
+function run_aur_step
+    echo "$BLUE$BOLD→$RESET Step 1: AUR Helper"
+    echo
+    
+    if test -z "$BS_AUR_HELPER"
+        echo "  $DIM(skipped — not configured)$RESET"
+        echo
+        return 0
+    end
+    
+    # Check if already installed
+    if command -v "$BS_AUR_HELPER" >/dev/null 2>&1
+        echo "  $GREEN✓$RESET $BS_AUR_HELPER is already installed"
+        echo
+        return 0
+    end
+    
+    echo "  $YELLOW○$RESET $BS_AUR_HELPER not found"
+    echo
+    
+    if not bootstrap_confirm "Install $BS_AUR_HELPER?"
+        echo "  $DIM(skipped)$RESET"
+        echo
+        return 0
+    end
+    
+    echo
+    echo "  $BLUE⠿$RESET Installing $BS_AUR_HELPER..."
+    echo
+    
+    # Install AUR helper from AUR
+    set -l tmp_dir (mktemp -d)
+    
+    if git clone "https://aur.archlinux.org/$BS_AUR_HELPER.git" "$tmp_dir/$BS_AUR_HELPER" 2>/dev/null
+        cd "$tmp_dir/$BS_AUR_HELPER"
+        if makepkg -si --noconfirm 2>&1
+            echo "  $GREEN✓$RESET $BS_AUR_HELPER installed"
+        else
+            echo "  $RED✗$RESET Failed to build $BS_AUR_HELPER"
+        end
+        cd -
+    else
+        echo "  $RED✗$RESET Failed to clone $BS_AUR_HELPER from AUR"
+    end
+    
+    rm -rf "$tmp_dir"
+    echo
+end
+
+function run_packages_step
+    echo "$BLUE$BOLD→$RESET Step 2: Packages"
+    echo
+    
+    if test (count $BS_PACKAGES) -eq 0
+        echo "  $DIM(skipped — no packages configured)$RESET"
+        echo
+        return 0
+    end
+    
+    echo "  $BOLD"(count $BS_PACKAGES)"$RESET packages to install:"
+    echo
+    for pkg in $BS_PACKAGES
+        echo "    $DIM•$RESET $pkg"
+    end
+    echo
+    
+    if not bootstrap_confirm "Install these packages?"
+        echo "  $DIM(skipped)$RESET"
+        echo
+        return 0
+    end
+    
+    echo
+    
+    # Determine installer command
+    set -l installer "sudo pacman -S --needed --noconfirm"
+    if test -n "$BS_AUR_HELPER"; and command -v "$BS_AUR_HELPER" >/dev/null 2>&1
+        set installer "$BS_AUR_HELPER -S --needed --noconfirm"
+    end
+    
+    echo "  $BLUE⠿$RESET Installing via $DIM$installer$RESET..."
+    echo
+    
+    if eval $installer $BS_PACKAGES 2>&1
+        echo
+        echo "  $GREEN✓$RESET Packages installed"
+    else
+        echo
+        echo "  $RED✗$RESET Some packages may have failed"
+    end
+    echo
+end
+
+function run_repos_step
+    echo "$BLUE$BOLD→$RESET Step 3: Git Repositories"
+    echo
+    
+    if test (count $BS_REPOS) -eq 0
+        echo "  $DIM(skipped — no repos configured)$RESET"
+        echo
+        return 0
+    end
+    
+    for repo_entry in $BS_REPOS
+        set -l parts (string split ' | ' "$repo_entry")
+        set -l url $parts[1]
+        set -l dest ""
+        set -l install_cmd ""
+        
+        if test (count $parts) -ge 2
+            set dest $parts[2]
+            # Expand ~ to HOME
+            set dest (string replace '~' "$HOME" "$dest")
+        else
+            set dest "$HOME/"(basename "$url" .git)
+        end
+        
+        if test (count $parts) -ge 3
+            set install_cmd $parts[3]
+        end
+        
+        echo "  $CYAN▸$RESET $url"
+        echo "    $DIM→ $dest$RESET"
+        if test -n "$install_cmd"
+            echo "    $DIM⚡ $install_cmd$RESET"
+        end
+        echo
+        
+        if test -d "$dest"
+            echo "  $YELLOW○$RESET Already exists: $dest"
+            
+            if test -n "$install_cmd"
+                if bootstrap_confirm "Run install script anyway?"
+                    echo
+                    cd "$dest"
+                    echo "  $BLUE⠿$RESET Running: $install_cmd"
+                    echo
+                    eval $install_cmd
+                    if test $status -eq 0
+                        echo
+                        echo "  $GREEN✓$RESET Install script completed"
+                    else
+                        echo
+                        echo "  $RED✗$RESET Install script failed"
+                    end
+                    cd -
+                end
+            end
+        else
+            if not bootstrap_confirm "Clone and set up this repo?"
+                echo "  $DIM(skipped)$RESET"
+                echo
+                continue
+            end
+            
+            echo
+            echo "  $BLUE⠿$RESET Cloning..."
+            
+            if git clone "$url" "$dest" 2>&1
+                echo "  $GREEN✓$RESET Cloned to $dest"
+                
+                if test -n "$install_cmd"
+                    echo
+                    echo "  $BLUE⠿$RESET Running: $install_cmd"
+                    echo
+                    cd "$dest"
+                    eval $install_cmd
+                    if test $status -eq 0
+                        echo
+                        echo "  $GREEN✓$RESET Install script completed"
+                    else
+                        echo
+                        echo "  $RED✗$RESET Install script failed"
+                    end
+                    cd -
+                end
+            else
+                echo "  $RED✗$RESET Failed to clone $url"
+            end
+        end
+        echo
+    end
+end
+
+function run_dm_step
+    echo "$BLUE$BOLD→$RESET Step 4: Display Manager"
+    echo
+    
+    if test -z "$BS_DM_NAME"
+        echo "  $DIM(skipped — not configured)$RESET"
+        echo
+        return 0
+    end
+    
+    # Check if already installed
+    if command -v "$BS_DM_NAME" >/dev/null 2>&1; or pacman -Qi "$BS_DM_NAME" >/dev/null 2>&1
+        echo "  $GREEN✓$RESET $BS_DM_NAME is already installed"
+    else
+        echo "  $YELLOW○$RESET $BS_DM_NAME not found"
+        echo
+        
+        if bootstrap_confirm "Install $BS_DM_NAME?"
+            echo
+            
+            # Determine installer
+            set -l installer "sudo pacman -S --needed --noconfirm"
+            if test -n "$BS_AUR_HELPER"; and command -v "$BS_AUR_HELPER" >/dev/null 2>&1
+                set installer "$BS_AUR_HELPER -S --needed --noconfirm"
+            end
+            
+            echo "  $BLUE⠿$RESET Installing $BS_DM_NAME..."
+            if eval $installer $BS_DM_NAME 2>&1
+                echo "  $GREEN✓$RESET $BS_DM_NAME installed"
+            else
+                echo "  $RED✗$RESET Failed to install $BS_DM_NAME"
+                echo
+                return 1
+            end
+        else
+            echo "  $DIM(skipped)$RESET"
+            echo
+            return 0
+        end
+    end
+    echo
+    
+    # Install theme if configured
+    if test -n "$BS_DM_THEME"
+        echo "  $CYAN▸$RESET Theme: $BOLD$BS_DM_THEME$RESET"
+        echo
+        
+        if test -n "$BS_DM_THEME_SOURCE"
+            # Theme from git repo
+            set -l theme_dest "/usr/share/sddm/themes/$BS_DM_THEME"
+            if test "$BS_DM_NAME" = "sddm"
+                set theme_dest "/usr/share/sddm/themes/$BS_DM_THEME"
+            end
+            
+            if bootstrap_confirm "Clone theme from $BS_DM_THEME_SOURCE?"
+                echo
+                set -l tmp_theme (mktemp -d)
+                if git clone "$BS_DM_THEME_SOURCE" "$tmp_theme/$BS_DM_THEME" 2>&1
+                    echo "  $BLUE⠿$RESET Installing theme to $theme_dest..."
+                    sudo cp -r "$tmp_theme/$BS_DM_THEME" "$theme_dest" 2>/dev/null
+                    if test $status -eq 0
+                        echo "  $GREEN✓$RESET Theme installed"
+                    else
+                        echo "  $RED✗$RESET Failed to install theme (permission issue?)"
+                    end
+                else
+                    echo "  $RED✗$RESET Failed to clone theme"
+                end
+                rm -rf "$tmp_theme"
+            end
+        else
+            # Theme from package manager
+            if bootstrap_confirm "Install theme package $BS_DM_THEME?"
+                echo
+                set -l installer "sudo pacman -S --needed --noconfirm"
+                if test -n "$BS_AUR_HELPER"; and command -v "$BS_AUR_HELPER" >/dev/null 2>&1
+                    set installer "$BS_AUR_HELPER -S --needed --noconfirm"
+                end
+                
+                echo "  $BLUE⠿$RESET Installing $BS_DM_THEME..."
+                if eval $installer $BS_DM_THEME 2>&1
+                    echo "  $GREEN✓$RESET Theme installed"
+                else
+                    echo "  $RED✗$RESET Failed to install theme"
+                end
+            end
+        end
+        echo
+    end
+    
+    # Enable DM service
+    if bootstrap_confirm "Enable $BS_DM_NAME.service?"
+        echo
+        echo "  $BLUE⠿$RESET Enabling $BS_DM_NAME.service..."
+        
+        # Disable any existing DM first
+        for dm in sddm gdm lightdm ly greetd
+            if test "$dm" != "$BS_DM_NAME"
+                sudo systemctl disable "$dm.service" 2>/dev/null
+            end
+        end
+        
+        if sudo systemctl enable "$BS_DM_NAME.service" 2>&1
+            echo "  $GREEN✓$RESET $BS_DM_NAME.service enabled"
+        else
+            echo "  $RED✗$RESET Failed to enable $BS_DM_NAME.service"
+        end
+    end
+    echo
+end
+
+function run_dotfiles_step
+    echo "$BLUE$BOLD→$RESET Step 5: Dotfile Restore"
+    echo
+    
+    if test $BS_DOTFILES_RESTORE -eq 0
+        echo "  $DIM(skipped — not configured)$RESET"
+        echo
+        return 0
+    end
+    
+    if not bootstrap_confirm "Restore dotfiles now?"
+        echo "  $DIM(skipped)$RESET"
+        echo
+        return 0
+    end
+    
+    echo
+    load_targets
+    load_excludes
+    restore_dotfiles
+end
+
+function run_commands_step
+    echo "$BLUE$BOLD→$RESET Step 6: Custom Commands"
+    echo
+    
+    if test (count $BS_COMMANDS) -eq 0
+        echo "  $DIM(skipped — no commands configured)$RESET"
+        echo
+        return 0
+    end
+    
+    echo "  Commands to run:"
+    echo
+    for cmd in $BS_COMMANDS
+        echo "    $DIM\$$RESET $cmd"
+    end
+    echo
+    
+    if not bootstrap_confirm "Execute these commands?"
+        echo "  $DIM(skipped)$RESET"
+        echo
+        return 0
+    end
+    
+    echo
+    set -l cmd_ok 0
+    set -l cmd_fail 0
+    
+    for cmd in $BS_COMMANDS
+        echo "  $BLUE⠿$RESET Running: $cmd"
+        if eval $cmd 2>&1
+            echo "  $GREEN✓$RESET Done"
+            set cmd_ok (math $cmd_ok + 1)
+        else
+            echo "  $RED✗$RESET Failed: $cmd"
+            set cmd_fail (math $cmd_fail + 1)
+        end
+        echo
+    end
+    
+    echo "  $GREEN$cmd_ok$RESET succeeded  $DIM│$RESET  $RED$cmd_fail$RESET failed"
+    echo
+end
+
+function bootstrap_run
+    set -l repo_url $argv[1]
+    
+    echo
+    echo "$CYAN$BOLD╭─────────────────────────────────────╮$RESET"
+    echo "$CYAN$BOLD│$RESET  ⚡ $BOLD"SYNX"$RESET - Bootstrap          $CYAN$BOLD│$RESET"
+    echo "$CYAN$BOLD╰─────────────────────────────────────╯$RESET"
+    echo
+    
+    set -l config_file "$SYNX_BOOTSTRAP"
+    
+    # If repo URL provided, clone first and get config from repo
+    if test -n "$repo_url"
+        echo "$BLUE$BOLD→$RESET Cloning dotfiles repository..."
+        echo
+        echo "  $DIM$repo_url$RESET"
+        echo
+        
+        if test -d "$DOTFILES_DIR/.git"
+            echo "  $YELLOW○$RESET Dotfiles repo already exists at $DOTFILES_DIR"
+            echo "  $BLUE⠿$RESET Pulling latest..."
+            cd "$DOTFILES_DIR"
+            git pull --rebase >/dev/null 2>&1
+            cd -
+        else
+            if not git clone "$repo_url" "$DOTFILES_DIR" 2>&1
+                echo "  $RED✗$RESET Failed to clone repository"
+                exit 1
+            end
+        end
+        
+        echo "  $GREEN✓$RESET Repository ready"
+        echo
+        
+        # Look for bootstrap config in repo
+        if test -f "$DOTFILES_DIR/.synx/bootstrap.conf"
+            # Copy to local config location
+            mkdir -p (dirname "$SYNX_BOOTSTRAP")
+            cp "$DOTFILES_DIR/.synx/bootstrap.conf" "$SYNX_BOOTSTRAP"
+            echo "  $GREEN✓$RESET Found bootstrap config in repo"
+            set config_file "$SYNX_BOOTSTRAP"
+        else
+            echo "  $YELLOW○$RESET No bootstrap config found in repo (.synx/bootstrap.conf)"
+            echo
+            read -P "  Run bootstrap setup wizard? [y/N] " -n 1 run_setup
+            echo
+            if test "$run_setup" = "y" -o "$run_setup" = "Y"
+                bootstrap_setup
+                return
+            else
+                echo "  Cancelled"
+                exit 0
+            end
+        end
+    end
+    
+    # Check local config exists
+    if not test -f "$config_file"
+        echo "$RED✗$RESET No bootstrap config found"
+        echo "  Run $CYAN"synx --bootstrap-setup"$RESET to create one"
+        exit 1
+    end
+    
+    # Parse config
+    if not parse_bootstrap_config "$config_file"
+        echo "$RED✗$RESET Failed to parse bootstrap config"
+        exit 1
+    end
+    
+    # ── Review step: show config and let user edit before running ──
+    review_bootstrap_config "$config_file"
+    
+    # Re-parse in case user edited the config
+    parse_bootstrap_config "$config_file"
+    
+    echo
+    echo "$BLUE$BOLD→$RESET Starting bootstrap..."
+    echo
+    echo "$DIM═══════════════════════════════════════$RESET"
+    echo
+    
+    # Track results
+    set -l steps_ok 0
+    set -l steps_fail 0
+    
+    # Run each step
+    run_aur_step
+    run_packages_step
+    run_repos_step
+    run_dm_step
+    run_dotfiles_step
+    run_commands_step
+    
+    # ── Summary ──
+    echo "$DIM═══════════════════════════════════════$RESET"
+    echo
+    echo "$GREEN$BOLD⚡$RESET  Bootstrap complete!"
+    echo
+    echo "$DIM  Your system is ready. You may want to:$RESET"
+    echo "    $DIM•$RESET Log out and back in for shell changes"
+    echo "    $DIM•$RESET Reboot for system service changes"
+    echo
+end
+
+function restore_dotfiles
+    echo
+    echo "$CYAN$BOLD╭─────────────────────────────────────╮$RESET"
+    echo "$CYAN$BOLD│$RESET  ⬇  $BOLD"SYNX"$RESET - Restore Mode     $CYAN$BOLD│$RESET"
+    echo "$CYAN$BOLD╰─────────────────────────────────────╯$RESET"
+    echo
+    
+    if not test -d "$DOTFILES_DIR/.git"
+        echo "$RED✗$RESET Error: $DOTFILES_DIR is not a git repository."
+        exit 1
+    end
+    
+    cd $DOTFILES_DIR
+    
+    # Check if pull is needed
+    echo "$BLUE$BOLD→$RESET Checking for updates..."
+    echo
+    
+    set BRANCH (git branch --show-current)
+    
+    # Fetch latest info from remote (SSH passphrase may prompt here)
+    git fetch origin $BRANCH 2>&1 | grep -v "Warning:" >/dev/null
+    
+    # Compare local and remote
+    set -l LOCAL (git rev-parse @)
+    set -l REMOTE (git rev-parse @{u} 2>/dev/null)
+    
+    if test "$LOCAL" = "$REMOTE"
+        echo "  $GREEN✓$RESET Already up-to-date"
+        echo
+    else
+        echo "  $BLUE ℹ$RESET Updates available"
+        echo
+        echo "$BLUE$BOLD→$RESET Pulling latest from remote..."
+        echo
+        
+        if git pull --rebase >/dev/null 2>&1
+            echo "  $GREEN✓$RESET Pulled latest changes"
+        else
+            echo "  $RED✗$RESET Failed to pull from remote"
+            exit 1
+        end
+    end
+    
+    echo
+    echo "$BLUE$BOLD→$RESET Restoring dotfiles to ~/.config..."
+    echo
+    
+    set -l restored 0
+    set -l failed 0
+    set -l skipped_excluded 0
+    
+    for target in $TARGETS
+        if test -d "$DOTFILES_DIR/$target" -o -f "$DOTFILES_DIR/$target"
+            # Check if target exists in .config
+            if test -e "$CONFIG_DIR/$target"
+                # Check if it's a symlink
+                if test -L "$CONFIG_DIR/$target"
+                    # Follow the symlink and restore to the actual location
+                    set -l real_path (readlink -f "$CONFIG_DIR/$target")
+                    mkdir -p "$real_path"
+                    
+                    # Overwrite non-excluded files in-place (excluded files stay untouched)
+                    set -l excluded_count 0
+                    for item in (find "$DOTFILES_DIR/$target" -type f)
+                        set -l rel_path (string replace "$DOTFILES_DIR/" "" "$item")
+                        
+                        if is_excluded "$rel_path"
+                            set excluded_count (math $excluded_count + 1)
+                            continue
+                        end
+                        
+                        set -l target_file (string replace "$DOTFILES_DIR/$target" "$real_path" "$item")
+                        mkdir -p (dirname "$target_file")
+                        cp -L "$item" "$target_file" 2>/dev/null
+                    end
+                    
+                    if test $excluded_count -gt 0
+                        echo "  $GREEN✓$RESET $target $DIM(symlink preserved, $excluded_count excluded)$RESET"
+                    else
+                        echo "  $GREEN✓$RESET $target $DIM(symlink preserved)$RESET"
+                    end
+                    set restored (math $restored + 1)
+                else
+                    # Regular directory - overwrite non-excluded files in-place
+                    mkdir -p "$CONFIG_DIR/$target"
+                    
+                    set -l excluded_count 0
+                    for item in (find "$DOTFILES_DIR/$target" -type f)
+                        set -l rel_path (string replace "$DOTFILES_DIR/" "" "$item")
+                        
+                        if is_excluded "$rel_path"
+                            set excluded_count (math $excluded_count + 1)
+                            continue
+                        end
+                        
+                        set -l target_file (string replace "$DOTFILES_DIR" "$CONFIG_DIR" "$item")
+                        mkdir -p (dirname "$target_file")
+                        cp -L "$item" "$target_file" 2>/dev/null
+                    end
+                    
+                    if test $excluded_count -gt 0
+                        echo "  $GREEN✓$RESET $target $DIM($excluded_count excluded)$RESET"
+                    else
+                        echo "  $GREEN✓$RESET $target"
+                    end
+                    set restored (math $restored + 1)
+                end
+            else
+                # Doesn't exist - just restore it
+                cp -rL "$DOTFILES_DIR/$target" "$CONFIG_DIR/" 2>/dev/null
+                if test $status -eq 0
+                    echo "  $GREEN✓$RESET $target"
+                    set restored (math $restored + 1)
+                else
+                    echo "  $RED✗$RESET $target $DIM(restore failed)$RESET"
+                    set failed (math $failed + 1)
+                end
+            end
+        else
+            echo "  $YELLOW○$RESET $target $DIM(not in dotfiles repo)$RESET"
+        end
+    end
+    
+    echo
+    echo "$DIM─────────────────────────────────────$RESET"
+    echo "$GREEN$BOLD$restored$RESET restored  $DIM│$RESET  $RED$failed$RESET failed"
+    echo "$DIM─────────────────────────────────────$RESET"
+    echo
+    
+    # Reload Hyprland if hypr was restored
+    if contains hypr $TARGETS; and test $restored -gt 0
+        echo "$BLUE$BOLD→$RESET Reloading Hyprland..."
+        echo
+        if hyprctl reload >/dev/null 2>&1
+            echo "  $GREEN✓$RESET Hyprland reloaded"
+            echo
+        end
+    end
+    
+    echo "$GREEN$BOLD✓$RESET  Restore complete!"
+    echo
+end
+
+# Load targets and excludes from config
+load_targets
+load_excludes
+
+# Parse arguments
+set -l mode "sync"
+set -l arg_value ""
+
+set -l i 1
+while test $i -le (count $argv)
+    set -l arg $argv[$i]
+    
+    switch $arg
+        case -h --help
+            show_help
+            exit 0
+        case -r --restore
+            set mode "restore"
+        case --list
+            list_dotfiles
+            exit 0
+        case --add
+            set i (math $i + 1)
+            if test $i -le (count $argv)
+                add_target $argv[$i]
+                exit 0
+            else
+                echo "$RED✗$RESET Error: --add requires an argument"
+                exit 1
+            end
+        case --remove
+            set i (math $i + 1)
+            if test $i -le (count $argv)
+                remove_target $argv[$i]
+                exit 0
+            else
+                echo "$RED✗$RESET Error: --remove requires an argument"
+                exit 1
+            end
+        case --exclude
+            set i (math $i + 1)
+            if test $i -le (count $argv)
+                add_exclude $argv[$i]
+                exit 0
+            else
+                echo "$RED✗$RESET Error: --exclude requires an argument"
+                exit 1
+            end
+        case --history
+            show_history
+            exit 0
+        case --rollback
+            set i (math $i + 1)
+            if test $i -le (count $argv)
+                rollback_dotfiles $argv[$i]
+                exit 0
+            else
+                echo "$RED✗$RESET Error: --rollback requires an argument"
+                exit 1
+            end
+        case --bootstrap-setup
+            bootstrap_setup
+            exit 0
+        case --bootstrap
+            # Check for optional repo URL (next arg that doesn't start with --)
+            set -l bs_url ""
+            if test (math $i + 1) -le (count $argv)
+                set -l next_arg $argv[(math $i + 1)]
+                if not string match -q '--*' "$next_arg"
+                    set bs_url "$next_arg"
+                    set i (math $i + 1)
+                end
+            end
+            bootstrap_run "$bs_url"
+            exit 0
+        case --yes
+            set -g BOOTSTRAP_YES 1
+        case '*'
+            echo "$RED✗$RESET Unknown option: $arg"
+            echo "  Run 'synx --help' for usage information"
+            exit 1
+    end
+    
+    set i (math $i + 1)
+end
+
+# Execute based on mode
+if test $mode = "restore"
+    restore_dotfiles
+    exit 0
+end
+
+# ═══════════════════════════════════════════════════════════
+#  SYNC MODE (Default)
+# ═══════════════════════════════════════════════════════════
+
+# Header
+echo
+echo "$CYAN$BOLD╭─────────────────────────────────────╮$RESET"
+echo "$CYAN$BOLD│$RESET  🚀 $BOLD"SYNX"$RESET - Dotfile Sync       $CYAN$BOLD│$RESET"
+echo "$CYAN$BOLD╰─────────────────────────────────────╯$RESET"
+echo
+
+# Ensure dotfiles directory exists
+if not test -d "$DOTFILES_DIR"
+    echo "$YELLOW⚠$RESET  Creating dotfiles directory..."
+    mkdir -p "$DOTFILES_DIR"
+end
+
+# Sync counter
+set -l synced 0
+set -l skipped 0
+
+# Copy configs
+echo "$BLUE$BOLD→$RESET Syncing dotfiles..."
+echo
+
+for target in $TARGETS
+    if test -d "$CONFIG_DIR/$target" -o -f "$CONFIG_DIR/$target"
+        # Copy directory with excludes
+        if test -d "$CONFIG_DIR/$target"
+            # Create target directory
+            mkdir -p "$DOTFILES_DIR/$target"
+            
+            # Copy files while respecting excludes
+            set -l copied 0
+            set -l excluded 0
+            
+            for item in (find "$CONFIG_DIR/$target" -type f)
+                set -l rel_path (string replace "$CONFIG_DIR/" "" "$item")
+                
+                if is_excluded "$rel_path"
+                    set excluded (math $excluded + 1)
+                    continue
+                end
+                
+                if test -f "$item"
+                    set -l target_file "$DOTFILES_DIR/$rel_path"
+                    mkdir -p (dirname "$target_file")
+                    cp -L "$item" "$target_file" 2>/dev/null
+                    set copied (math $copied + 1)
+                end
+            end
+            
+            if test $excluded -gt 0
+                printf "\r  $GREEN✓$RESET $target $DIM($excluded excluded)$RESET                    \n"
+            else
+                printf "\r  $GREEN✓$RESET $target                    \n"
+            end
+            set synced (math $synced + 1)
+        else
+            # Single file - check if excluded
+            if is_excluded "$target"
+                echo "  $YELLOW○$RESET $target $DIM(excluded)$RESET"
+                set skipped (math $skipped + 1)
+                continue
+            end
+            
+            # Show spinner during copy
+            cp -rL "$CONFIG_DIR/$target" "$DOTFILES_DIR/" 2>/dev/null &
+            set -l copy_pid $last_pid
+            
+            set -l frames "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏"
+            set -l i 1
+            while kill -0 $copy_pid 2>/dev/null
+                printf "\r  $CYAN$frames[$i]$RESET Syncing $target..."
+                set i (math "($i % "(count $frames)") + 1")
+                sleep 0.08
+            end
+        
+            wait $copy_pid
+            set -l copy_status $status
+            
+            if test $copy_status -eq 0
+                printf "\r  $GREEN✓$RESET $target                    \n"
+                set synced (math $synced + 1)
+            else
+                printf "\r  $RED✗$RESET $target $DIM(copy failed)$RESET\n"
+                set skipped (math $skipped + 1)
+            end
+        end
+    else
+        echo "  $YELLOW○$RESET $target $DIM(not found)$RESET"
+        set skipped (math $skipped + 1)
+    end
+end
+
+echo
+echo "$DIM─────────────────────────────────────$RESET"
+echo "$GREEN$BOLD$synced$RESET synced  $DIM│$RESET  $YELLOW$skipped$RESET skipped"
+echo "$DIM─────────────────────────────────────$RESET"
+echo
+
+# Sync bootstrap config to dotfiles repo if it exists
+if test -f "$SYNX_BOOTSTRAP"
+    mkdir -p "$DOTFILES_DIR/.synx"
+    cp "$SYNX_BOOTSTRAP" "$DOTFILES_DIR/.synx/bootstrap.conf"
+end
+
+# Git operations
+cd $DOTFILES_DIR
+
+if not test -d .git
+    echo "$RED✗$RESET Error: $DOTFILES_DIR is not a git repository."
+    echo "$DIM  Run: cd $DOTFILES_DIR && git init && git remote add origin <url>$RESET"
+    exit 1
+end
+
+# Check for changes
+if test -z (git status --porcelain)
+    echo "$BLUE ℹ$RESET  No changes to commit"
+    exit 0
+end
+
+# Show what changed
+echo "$BLUE$BOLD→$RESET Committing changes..."
+echo
+
+set -l changed_files (git status --short | wc -l)
+echo "$DIM  Modified: $changed_files file(s)$RESET"
+echo
+
+# Commit
+set -l timestamp (date +'%Y-%m-%d %H:%M')
+git add . 2>/dev/null
+git commit -m "Update rice: $timestamp" --quiet
+
+if test $status -eq 0
+    echo "  $GREEN✓$RESET Committed changes"
+else
+    echo "  $RED✗$RESET Commit failed"
+    exit 1
+end
+
+# Push
+echo
+echo "$BLUE$BOLD→$RESET Pushing to remote..."
+echo
+
+set BRANCH (git branch --show-current)
+
+# Push in background with spinner
+git push -u origin $BRANCH >/dev/null 2>&1 &
+set -l push_pid $last_pid
+
+set -l frames "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏"
+set -l i 1
+while kill -0 $push_pid 2>/dev/null
+    printf "\r  $CYAN$frames[$i]$RESET Pushing to $MAGENTA$BRANCH$RESET..."
+    set i (math "($i % "(count $frames)") + 1")
+    sleep 0.08
+end
+
+wait $push_pid
+set -l push_status $status
+
+if test $push_status -eq 0
+    printf "\r  $GREEN✓$RESET Pushed to $MAGENTA$BRANCH$RESET           \n"
+    echo
+    echo "$GREEN$BOLD☁$RESET  Sync complete!"
+else
+    printf "\r  $RED✗$RESET Push failed                    \n"
+    echo "$DIM  Check your git remote configuration and SSH keys$RESET"
+    exit 1
+end
+
+echo
