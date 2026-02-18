@@ -4,13 +4,12 @@ A powerful Fish shell tool for managing dotfiles with git-based version control,
 
 ## Features
 
-✅ Auto-commit & push to GitHub  
-✅ SSH authentication  
+✅ Commit & push to GitHub    
 ✅ Symlink preservation  
 ✅ Dynamic target management  
 ✅ Git history & time-travel rollback  
 ✅ Exclude patterns for machine-specific configs  
-✅ Auto-reload Hyprland  
+✅ Auto-reloads Hyprland  
 ✅ System bootstrap — provision a new machine in one command  
 
 ## Quick Start
@@ -18,7 +17,7 @@ A powerful Fish shell tool for managing dotfiles with git-based version control,
 ### Installation
 
 ```bash
-git clone <this-repo>
+git clone https://github.com/Blumenwagen/synx.git
 cd synx
 ./install.sh
 ```
@@ -31,7 +30,7 @@ The installer will:
 ### Basic Usage
 
 ```fish
-synx                       # Sync to GitHub
+synx                       # Copy and Sync to GitHub
 synx --restore             # Restore from GitHub
 synx --list                # List tracked dotfiles
 synx --history             # View sync history
@@ -43,9 +42,9 @@ synx --history             # View sync history
 |---------|-------------|
 | `synx` | Sync dotfiles to GitHub |
 | `synx --restore` | Restore dotfiles from GitHub |
-| `synx --add <name>` | Track a new dotfile |
-| `synx --remove <name>` | Stop tracking a dotfile |
-| `synx --exclude <pattern>` | Exclude machine-specific file |
+| `synx --add <name>` | Track a new dotfile directory |
+| `synx --remove <name>` | Stop tracking a dotfile directory |
+| `synx --exclude <path>` | Exclude machine-specific file |
 | `synx --list` | List tracked/available dotfiles |
 | `synx --history` | Show commit history |
 | `synx --rollback <n>` | Rollback n commits |
@@ -65,8 +64,8 @@ synx --bootstrap-setup
 ```
 
 The wizard walks you through:
-1. **AUR Helper** — detect/choose paru, yay, etc.
-2. **Packages** — list packages to install
+1. **AUR Helper** — detect/choose paru, yay
+2. **Packages** — choose packages to install on bootstrap
 3. **Git Repos** — repos to clone with optional install scripts
 4. **Dotfile Restore** — auto-restore dotfiles after setup
 5. **Custom Commands** — post-install commands (chsh, systemctl, etc.)
@@ -93,7 +92,7 @@ helper = paru
 list = firefox hyprland waybar kitty rofi-wayland
 
 [repos]
-repo = https://github.com/user/caelestia.git | ~/caelestia | ./install.sh
+repo = https://github.com/user/project.git | ~/project | ./install.sh
 
 [dotfiles]
 restore = true
@@ -110,9 +109,6 @@ Use the same dotfiles repo on multiple machines while keeping machine-specific c
 # Exclude machine-specific files
 synx --exclude hypr/monitors.conf
 synx --exclude hypr/workspaces.conf
-
-# Each machine keeps its own configs
-# Everything else syncs perfectly
 ```
 
 ## Configuration
@@ -124,7 +120,6 @@ synx --exclude hypr/workspaces.conf
 
 ## Requirements
 
-- Fish shell
+- Fish shell (can be installed by the synx install-script)
 - Git
-- SSH key for GitHub (for password-free sync)
 
