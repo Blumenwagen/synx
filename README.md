@@ -2,6 +2,9 @@
 
 A powerful Fish shell tool for managing dotfiles with git-based version control, machine-specific exclusions, and full system bootstrapping.
 
+> [!WARNING]
+> Synx is specifically designed for **Arch Linux** and Arch-based distributions. It relies on `pacman` and AUR helpers (like `paru` or `yay`) for package management and bootstrapping. Usage on other distributions is not supported and may not work as intended.
+
 ## Features
 
 ✅ Commit & push to GitHub    
