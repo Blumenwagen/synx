@@ -40,7 +40,9 @@ synx --history             # View sync history
 ```
 ### Known Issues
 
-- It may hang on a loading icon on restore, when trying to connect to github. This happens if auth is enabled. synx does NOT show anything and just hangs. To fix this, you need to type in your git auth password / passphrase and press enter, this will fix it, as it is waiting for that input, although it doesn't show it.
+**It may hang on a loading icon on restore, when trying to connect to github.** 
+This happens if auth is enabled. synx does NOT show anything and just hangs. 
+To fix this, you need to type in your git auth password / passphrase and press enter, this will fix it, as it is waiting for that input, although it doesn't show it.
 
 
 ## Commands
