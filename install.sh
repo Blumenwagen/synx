@@ -23,87 +23,86 @@ echo
 echo -e "${BLUE}→${RESET} Checking dependencies..."
 echo
 
+install_pkg() {
+    local pkg=$1
+    if command -v pacman &> /dev/null; then
+        sudo pacman -S --needed --noconfirm "$pkg"
+    elif command -v apt-get &> /dev/null; then
+        sudo apt-get update -y && sudo apt-get install -y "$pkg"
+    elif command -v dnf &> /dev/null; then
+        sudo dnf install -y "$pkg"
+    elif command -v zypper &> /dev/null; then
+        sudo zypper install -y "$pkg"
+    elif command -v brew &> /dev/null; then
+        brew install "$pkg"
+    else
+        return 1
+    fi
+}
+
 # Check git
 if ! command -v git &> /dev/null; then
     echo -e "  ${RED}✗${RESET} git not found"
-    echo -e "  ${YELLOW}⚠${RESET}  Please install git first: ${CYAN}sudo pacman -S git${RESET}"
+    echo -e "  ${YELLOW}⚠${RESET}  Please install git using your system's package manager."
     exit 1
 else
     echo -e "  ${GREEN}✓${RESET} git"
 fi
 
-# Check fish — offer to install if missing
-if ! command -v fish &> /dev/null; then
-    echo -e "  ${RED}✗${RESET} fish shell not found"
-    echo
-    read -p "  Install fish shell? [Y/n] " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-        echo -e "  ${BLUE}⠿${RESET} Installing fish..."
-        if sudo pacman -S --needed --noconfirm fish; then
-            echo -e "  ${GREEN}✓${RESET} fish shell installed"
-        else
-            echo -e "  ${RED}✗${RESET} Failed to install fish"
-            exit 1
-        fi
-    else
-        echo -e "${RED}✗${RESET} fish shell is required for synx."
-        exit 1
-    fi
+# Check go
+if ! command -v go &> /dev/null; then
+    echo -e "  ${RED}✗${RESET} go not found"
+    echo -e "  ${YELLOW}⚠${RESET}  Please install go (golang) using your system's package manager."
+    exit 1
 else
-    echo -e "  ${GREEN}✓${RESET} fish shell"
+    echo -e "  ${GREEN}✓${RESET} go"
 fi
 
-# Offer to set fish as default shell
-CURRENT_SHELL=$(basename "$SHELL")
-if [ "$CURRENT_SHELL" != "fish" ]; then
-    echo
-    echo -e "  ${YELLOW}○${RESET} Current default shell: ${BOLD}$CURRENT_SHELL${RESET}"
-    read -p "  Set fish as your default shell? [y/N] " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        FISH_PATH=$(which fish)
-        # Ensure fish is in /etc/shells
-        if ! grep -q "$FISH_PATH" /etc/shells 2>/dev/null; then
-            echo -e "  ${BLUE}⠿${RESET} Adding fish to /etc/shells..."
-            echo "$FISH_PATH" | sudo tee -a /etc/shells > /dev/null
-        fi
-        if chsh -s "$FISH_PATH"; then
-            echo -e "  ${GREEN}✓${RESET} Default shell set to fish"
-            echo -e "  ${YELLOW}⚠${RESET}  Log out and back in for this to take effect"
-        else
-            echo -e "  ${RED}✗${RESET} Failed to change shell (you can run ${CYAN}chsh -s $FISH_PATH${RESET} manually)"
-        fi
-    fi
-fi
-
-echo
 
 # Install synx command
-echo -e "${BLUE}→${RESET} Installing synx command..."
+echo -e "${BLUE}→${RESET} Building and Installing synx command..."
 echo
 
 INSTALL_DIR="$HOME/.local/bin"
 mkdir -p "$INSTALL_DIR"
 
-# Use symlink so updates are instant
+# Build go binary
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/synx-go"
+echo -e "  ${BLUE}⠿${RESET} Compiling go binary..."
+go build -o synx main.go
+if [ $? -ne 0 ]; then
+    echo -e "  ${RED}✗${RESET} Failed to build synx-go"
+    exit 1
+fi
+echo -e "  ${GREEN}✓${RESET} Build complete"
+
+# Use symlink so updates are instant (if the binary is rebuilt)
 if [ -L "$INSTALL_DIR/synx" ] || [ -f "$INSTALL_DIR/synx" ]; then
     rm -f "$INSTALL_DIR/synx"
 fi
-ln -s "$SCRIPT_DIR/synx" "$INSTALL_DIR/synx"
-chmod +x "$SCRIPT_DIR/synx"
+ln -s "$SCRIPT_DIR/synx-go/synx" "$INSTALL_DIR/synx"
 
 echo -e "  ${GREEN}✓${RESET} Linked to $INSTALL_DIR/synx"
 
-# Add ~/.local/bin to fish PATH
-echo -e "  ${BLUE}⠿${RESET} Configuring fish PATH..."
-fish -c "fish_add_path -g $INSTALL_DIR" 2>/dev/null
-if [ $? -eq 0 ]; then
-    echo -e "  ${GREEN}✓${RESET} Added $INSTALL_DIR to fish PATH"
+# Add ~/.local/bin to PATH
+echo -e "  ${BLUE}⠿${RESET} Configuring PATH..."
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+    CURRENT_SHELL=$(basename "$SHELL" 2>/dev/null || echo "bash")
+    if [ "$CURRENT_SHELL" = "fish" ] && command -v fish &> /dev/null; then
+        fish -c "fish_add_path -g $INSTALL_DIR" 2>/dev/null
+        echo -e "  ${GREEN}✓${RESET} Added $INSTALL_DIR to fish PATH"
+    elif [ "$CURRENT_SHELL" = "zsh" ]; then
+        echo -e "\nexport PATH=\"\$PATH:$INSTALL_DIR\"" >> ~/.zshrc
+        echo -e "  ${GREEN}✓${RESET} Added $INSTALL_DIR to ~/.zshrc"
+    elif [ "$CURRENT_SHELL" = "bash" ]; then
+        echo -e "\nexport PATH=\"\$PATH:$INSTALL_DIR\"" >> ~/.bashrc
+        echo -e "  ${GREEN}✓${RESET} Added $INSTALL_DIR to ~/.bashrc"
+    else
+        echo -e "  ${YELLOW}⚠${RESET}  Please add $INSTALL_DIR to your PATH manually"
+    fi
 else
-    echo -e "  ${YELLOW}⚠${RESET}  Could not add to PATH automatically"
-    echo -e "  Run this in fish: ${CYAN}fish_add_path ~/.local/bin${RESET}"
+    echo -e "  ${GREEN}✓${RESET} $INSTALL_DIR is already in PATH"
 fi
 
 echo
