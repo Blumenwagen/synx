@@ -51,9 +51,14 @@ fi
 
 # Check go
 if ! command -v go &> /dev/null; then
-    echo -e "  ${RED}✗${RESET} go not found"
-    echo -e "  ${YELLOW}⚠${RESET}  Please install go (golang) using your system's package manager."
-    exit 1
+    echo -e "  ${YELLOW}⚠${RESET}  go not found, attempting to install..."
+    if install_pkg go || install_pkg golang; then
+        echo -e "  ${GREEN}✓${RESET} go (installed)"
+    else
+        echo -e "  ${RED}✗${RESET} Failed to install go automatically"
+        echo -e "  ${YELLOW}⚠${RESET}  Please install go (golang) manually."
+        exit 1
+    fi
 else
     echo -e "  ${GREEN}✓${RESET} go"
 fi

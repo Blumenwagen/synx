@@ -26,7 +26,7 @@ cd synx
 ./install.sh
 ```
 
-Requires **Go** and **git**. The installer builds the binary and symlinks it to `/bin/synx`.
+Requires **git**. The installer will install **Go** automatically if needed, build the binary, and symlink it to `/bin/synx`.
 
 ### Basic Usage
 
@@ -120,7 +120,7 @@ list = firefox hyprland waybar kitty rofi-wayland
 [repos]
 repo = https://github.com/user/project.git | ~/project | ./install.sh
 
-[dotfiles]
+[dotfiles]ally if needed, build the binary, and sy
 restore = true
 
 [commands]
@@ -140,5 +140,5 @@ run = chsh -s /usr/bin/fish
 
 ## Requirements
 
-- Go (for building)
 - Git
+- Go (auto-installed by the installer if missing)
