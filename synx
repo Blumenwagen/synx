@@ -319,7 +319,8 @@ function rollback_dotfiles
     echo
     echo "$YELLOW$BOLD⚠  WARNING$RESET"
     echo "  This will reset your dotfiles repo to $steps commit(s) ago."
-    echo "  Current changes will be lost."
+    echo "  Current changes will be lost, and the remote GitHub repository"
+    echo "  will be force-pushed to match this rolled-back state."
     echo
     
     cd $DOTFILES_DIR
@@ -346,6 +347,17 @@ function rollback_dotfiles
     if git reset --hard HEAD~$steps >/dev/null 2>&1
         echo "  $GREEN✓$RESET Rolled back to $CYAN$target_commit$RESET"
         echo
+        
+        echo "$BLUE$BOLD→$RESET Force pushing to remote to update history..."
+        set -l branch (git branch --show-current)
+        if git push --force origin $branch >/dev/null 2>&1
+            echo "  $GREEN✓$RESET Remote history updated"
+        else
+            echo "  $RED✗$RESET Failed to force push to remote"
+            echo "  $DIM(You may need to push manually: git push --force origin $branch)$RESET"
+        end
+        echo
+        
         echo "$BLUE$BOLD→$RESET Restoring dotfiles to ~/.config..."
         echo
         
@@ -1362,17 +1374,47 @@ function restore_dotfiles
         echo "$BLUE$BOLD→$RESET Pulling latest from remote..."
         echo
         
+        # Stash any local uncommitted changes before pulling
+        set -l stashed 0
+        if not test -z (git status --porcelain)
+            git stash push -m "synx_tmp_stash" --quiet
+            set stashed 1
+        end
+        
         if git pull --rebase >/dev/null 2>&1
             echo "  $GREEN✓$RESET Pulled latest changes"
         else
             echo "  $RED✗$RESET Failed to pull from remote"
+            if test $stashed -eq 1
+                git stash pop --quiet
+            end
             exit 1
+        end
+        
+        # Restore stashed changes
+        if test $stashed -eq 1
+            git stash pop --quiet >/dev/null 2>&1
+            echo "  $GREEN✓$RESET Restored local uncommitted changes"
         end
     end
     
     echo
     echo "$BLUE$BOLD→$RESET Restoring dotfiles to ~/.config..."
     echo
+    
+    # Restore internal configs first so targets and excludes are up to date
+    if test -d "$DOTFILES_DIR/.synx"
+        mkdir -p "$CONFIG_DIR/synx"
+        if test -f "$DOTFILES_DIR/.synx/synx.conf"
+            cp "$DOTFILES_DIR/.synx/synx.conf" "$SYNX_CONFIG"
+        end
+        if test -f "$DOTFILES_DIR/.synx/exclude.conf"
+            cp "$DOTFILES_DIR/.synx/exclude.conf" "$SYNX_EXCLUDE"
+        end
+        # Reload the updated configs
+        load_targets
+        load_excludes
+    end
     
     set -l restored 0
     set -l failed 0
@@ -1629,7 +1671,7 @@ for target in $TARGETS
             end
             
             # Show spinner during copy
-            cp -rL "$CONFIG_DIR/$target" "$DOTFILES_DIR/" 2>/dev/null &
+            cp -rL "$CONFIG_DIR/$target" "$DOTFILES_DIR/$target" 2>/dev/null &
             set -l copy_pid $last_pid
             
             set -l frames "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏"
@@ -1663,10 +1705,16 @@ echo "$GREEN$BOLD$synced$RESET synced  $DIM│$RESET  $YELLOW$skipped$RESET skip
 echo "$DIM─────────────────────────────────────$RESET"
 echo
 
-# Sync bootstrap config to dotfiles repo if it exists
+# Sync internal configs to dotfiles repo if they exist
+mkdir -p "$DOTFILES_DIR/.synx"
 if test -f "$SYNX_BOOTSTRAP"
-    mkdir -p "$DOTFILES_DIR/.synx"
     cp "$SYNX_BOOTSTRAP" "$DOTFILES_DIR/.synx/bootstrap.conf"
+end
+if test -f "$SYNX_CONFIG"
+    cp "$SYNX_CONFIG" "$DOTFILES_DIR/.synx/synx.conf"
+end
+if test -f "$SYNX_EXCLUDE"
+    cp "$SYNX_EXCLUDE" "$DOTFILES_DIR/.synx/exclude.conf"
 end
 
 # Git operations
@@ -1711,27 +1759,15 @@ echo
 
 set BRANCH (git branch --show-current)
 
-# Push in background with spinner
-git push -u origin $BRANCH >/dev/null 2>&1 &
-set -l push_pid $last_pid
-
-set -l frames "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏"
-set -l i 1
-while kill -0 $push_pid 2>/dev/null
-    printf "\r  $CYAN$frames[$i]$RESET Pushing to $MAGENTA$BRANCH$RESET..."
-    set i (math "($i % "(count $frames)") + 1")
-    sleep 0.08
-end
-
-wait $push_pid
-set -l push_status $status
-
-if test $push_status -eq 0
-    printf "\r  $GREEN✓$RESET Pushed to $MAGENTA$BRANCH$RESET           \n"
+# Push directly so auth prompts (passphrase/credentials) are visible
+if git push -u origin $BRANCH
+    echo
+    echo "  $GREEN✓$RESET Pushed to $MAGENTA$BRANCH$RESET"
     echo
     echo "$GREEN$BOLD☁$RESET  Sync complete!"
 else
-    printf "\r  $RED✗$RESET Push failed                    \n"
+    echo
+    echo "  $RED✗$RESET Push failed"
     echo "$DIM  Check your git remote configuration and SSH keys$RESET"
     exit 1
 end
