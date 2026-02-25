@@ -63,9 +63,6 @@ fi
 echo -e "${BLUE}→${RESET} Building and Installing synx command..."
 echo
 
-INSTALL_DIR="$HOME/.local/bin"
-mkdir -p "$INSTALL_DIR"
-
 # Build go binary
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/synx-go"
@@ -77,33 +74,10 @@ if [ $? -ne 0 ]; then
 fi
 echo -e "  ${GREEN}✓${RESET} Build complete"
 
-# Use symlink so updates are instant (if the binary is rebuilt)
-if [ -L "$INSTALL_DIR/synx" ] || [ -f "$INSTALL_DIR/synx" ]; then
-    rm -f "$INSTALL_DIR/synx"
-fi
-ln -s "$SCRIPT_DIR/synx-go/synx" "$INSTALL_DIR/synx"
-
-echo -e "  ${GREEN}✓${RESET} Linked to $INSTALL_DIR/synx"
-
-# Add ~/.local/bin to PATH
-echo -e "  ${BLUE}⠿${RESET} Configuring PATH..."
-if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-    CURRENT_SHELL=$(basename "$SHELL" 2>/dev/null || echo "bash")
-    if [ "$CURRENT_SHELL" = "fish" ] && command -v fish &> /dev/null; then
-        fish -c "fish_add_path -g $INSTALL_DIR" 2>/dev/null
-        echo -e "  ${GREEN}✓${RESET} Added $INSTALL_DIR to fish PATH"
-    elif [ "$CURRENT_SHELL" = "zsh" ]; then
-        echo -e "\nexport PATH=\"\$PATH:$INSTALL_DIR\"" >> ~/.zshrc
-        echo -e "  ${GREEN}✓${RESET} Added $INSTALL_DIR to ~/.zshrc"
-    elif [ "$CURRENT_SHELL" = "bash" ]; then
-        echo -e "\nexport PATH=\"\$PATH:$INSTALL_DIR\"" >> ~/.bashrc
-        echo -e "  ${GREEN}✓${RESET} Added $INSTALL_DIR to ~/.bashrc"
-    else
-        echo -e "  ${YELLOW}⚠${RESET}  Please add $INSTALL_DIR to your PATH manually"
-    fi
-else
-    echo -e "  ${GREEN}✓${RESET} $INSTALL_DIR is already in PATH"
-fi
+# Symlink to /bin so synx is available system-wide
+echo -e "  ${BLUE}⠿${RESET} Linking to /bin/synx..."
+sudo ln -sf "$SCRIPT_DIR/synx-go/synx" /bin/synx
+echo -e "  ${GREEN}✓${RESET} Linked to /bin/synx"
 
 echo
 
@@ -152,28 +126,52 @@ echo
 # Ask about dotfiles repo setup
 echo -e "${BLUE}→${RESET} Dotfiles repository setup"
 echo
-read -p "  Initialize dotfiles repo in ~/dotfiles? [y/N] " -n 1 -r
-echo
 
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    if [ -d ~/dotfiles/.git ]; then
-        echo -e "  ${YELLOW}○${RESET} Repository already exists, skipping"
-    else
-        mkdir -p ~/dotfiles
-        cd ~/dotfiles
-        git init
-        echo -e "  ${GREEN}✓${RESET} Initialized git repo in ~/dotfiles"
-        echo
-        read -p "  Add GitHub remote? [y/N] " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            read -p "  GitHub repo URL: " REPO_URL
-            if [ -n "$REPO_URL" ]; then
-                git remote add origin "$REPO_URL"
-                echo -e "  ${GREEN}✓${RESET} Added remote: $REPO_URL"
+if [ -d ~/dotfiles/.git ]; then
+    echo -e "  ${YELLOW}○${RESET} Repository already exists at ~/dotfiles, skipping"
+else
+    echo -e "  ${BOLD}Choose an option:${RESET}"
+    echo -e "    ${CYAN}1)${RESET} Initialize a new repo in ~/dotfiles"
+    echo -e "    ${CYAN}2)${RESET} Clone an existing repo to ~/dotfiles"
+    echo -e "    ${CYAN}3)${RESET} Skip"
+    echo
+    read -p "  Enter choice [1/2/3]: " -n 1 -r REPO_CHOICE
+    echo
+
+    case "$REPO_CHOICE" in
+        1)
+            mkdir -p ~/dotfiles
+            cd ~/dotfiles
+            git init
+            echo -e "  ${GREEN}✓${RESET} Initialized git repo in ~/dotfiles"
+            echo
+            read -p "  Add remote? [y/N] " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                read -p "  Remote URL: " REPO_URL
+                if [ -n "$REPO_URL" ]; then
+                    git remote add origin "$REPO_URL"
+                    echo -e "  ${GREEN}✓${RESET} Added remote: $REPO_URL"
+                fi
             fi
-        fi
-    fi
+            ;;
+        2)
+            read -p "  Remote URL to clone: " CLONE_URL
+            if [ -n "$CLONE_URL" ]; then
+                git clone "$CLONE_URL" ~/dotfiles && CLONE_OK=1 || CLONE_OK=0
+                if [ "$CLONE_OK" -eq 1 ]; then
+                    echo -e "  ${GREEN}✓${RESET} Cloned to ~/dotfiles"
+                else
+                    echo -e "  ${RED}✗${RESET} Failed to clone repository"
+                fi
+            else
+                echo -e "  ${YELLOW}⚠${RESET}  No URL provided, skipping"
+            fi
+            ;;
+        *)
+            echo -e "  ${YELLOW}○${RESET} Skipped dotfiles repo setup"
+            ;;
+    esac
 fi
 
 echo
