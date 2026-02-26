@@ -71,8 +71,8 @@ echo
 # Build go binary
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/synx-go"
-echo -e "  ${BLUE}⠿${RESET} Compiling go binary..."
-go build -o synx main.go
+echo -e "  ${BLUE}⠿${RESET} Compiling binary via build.sh..."
+./build.sh
 if [ $? -ne 0 ]; then
     echo -e "  ${RED}✗${RESET} Failed to build synx-go"
     exit 1

@@ -13,6 +13,11 @@ var rootCmd = &cobra.Command{
 	Short: "Dotfile backup system",
 	Long:  "A powerful CLI tool for managing dotfiles with git-based version control, machine-specific exclusions, and full system bootstrapping.",
 	Run: func(cmd *cobra.Command, args []string) {
+		if versionFlag {
+			fmt.Println("synx version " + Version)
+			return
+		}
+
 		// By default run sync
 		ui.PrintHeader("🚀", "Dotfile Sync")
 		fmt.Println()
@@ -22,6 +27,8 @@ var rootCmd = &cobra.Command{
 }
 
 var (
+	Version = "dev"
+
 	restoreFlag       bool
 	listFlag          bool
 	historyFlag       bool
@@ -43,6 +50,7 @@ var (
 	remoteDiffFlag    bool
 	updateFlag        bool
 	cleanFlag         bool
+	versionFlag       bool
 )
 
 func init() {
@@ -69,6 +77,7 @@ func init() {
 	rootCmd.Flags().StringVar(&profileDeleteFlag, "profile-delete", "", "Delete a profile")
 	rootCmd.Flags().BoolVar(&remoteDiffFlag, "remote-diff", false, "Show diff between local and remote dotfiles")
 	rootCmd.Flags().BoolVar(&updateFlag, "update", false, "Update synx to the latest version")
+	rootCmd.Flags().BoolVarP(&versionFlag, "version", "v", false, "Print the synx version")
 
 	// Override the default help
 	rootCmd.SetHelpFunc(customHelp)

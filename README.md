@@ -61,3 +61,4 @@ synx --help                # Full command list
 | [Doctor](https://github.com/Blumenwagen/synx/wiki/Doctor) | Health checks & diagnostics |
 
 
+ 

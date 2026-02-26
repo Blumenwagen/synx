@@ -24,6 +24,11 @@ import (
 func init() {
 	// Sync logic mapping (rootCmd Run)
 	rootCmd.Run = func(cmd *cobra.Command, args []string) {
+		if versionFlag {
+			fmt.Println("synx version " + Version)
+			return
+		}
+
 		cfg, err := config.NewConfigManager()
 		if err != nil {
 			ui.Error(fmt.Sprintf("Init error: %v", err))
@@ -1435,25 +1440,37 @@ func runUpdate() {
 
 	// 4. Build new binary to temp file
 	fmt.Println()
-	ui.Step("Building new binary...")
-	tmpBin := realPath + ".new"
-	buildCmd := exec.Command("go", "build", "-o", tmpBin, ".")
+	ui.Step("Building new binary via build.sh...")
+
+	buildCmd := exec.Command("./build.sh")
 	buildCmd.Dir = sourceDir
+	buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr
 	if err := buildCmd.Run(); err != nil {
-		ui.Error("Build failed: " + err.Error())
-		os.Remove(tmpBin)
+		ui.Error("Build script failed: " + err.Error())
 		os.Exit(1)
 	}
-	ui.Success("Build complete")
 
-	// 5. Replace old binary with new one
-	ui.Step("Replacing binary...")
-	if err := os.Rename(tmpBin, realPath); err != nil {
-		ui.Error("Failed to replace binary: " + err.Error())
-		ui.Detail("New binary at: " + tmpBin)
+	// 5. Replace old binary with new one (build.sh outputs to sourceDir/synx)
+	newBin := filepath.Join(sourceDir, "synx")
+	if _, err := os.Stat(newBin); err != nil {
+		ui.Error("Cannot find newly compiled binary at " + newBin)
 		os.Exit(1)
 	}
+
+	ui.Step("Replacing binary...")
+	tmpBin := realPath + ".old"
+	os.Rename(realPath, tmpBin) // Move current out of the way
+
+	if err := os.Rename(newBin, realPath); err != nil {
+		// Rollback if replace fails
+		os.Rename(tmpBin, realPath)
+		ui.Error("Failed to replace binary: " + err.Error())
+		os.Exit(1)
+	}
+	// Delete the old binary on success
+	os.Remove(tmpBin)
+
 	ui.Success("Binary updated at " + realPath)
 
 	// 6. Show the version we updated to
