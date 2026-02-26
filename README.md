@@ -19,6 +19,7 @@ synx                       # Sync dotfiles to remote Git Repo
 synx -r                    # Restore from remote Git Repo
 synx -s                    # Show what changed
 synx -n                    # Dry-run (preview only)
+synx --update              # Update synx to the latest available version
 synx --doctor              # Health checks
 synx --profile smooth      # Switch to a profile
 synx --help                # Full command list
