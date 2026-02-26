@@ -41,6 +41,7 @@ var (
 	profileCreateFlag string
 	profileDeleteFlag string
 	remoteDiffFlag    bool
+	updateFlag        bool
 )
 
 func init() {
@@ -64,6 +65,7 @@ func init() {
 	rootCmd.Flags().StringVar(&profileCreateFlag, "profile-create", "", "Create a new profile")
 	rootCmd.Flags().StringVar(&profileDeleteFlag, "profile-delete", "", "Delete a profile")
 	rootCmd.Flags().BoolVar(&remoteDiffFlag, "remote-diff", false, "Show diff between local and remote dotfiles")
+	rootCmd.Flags().BoolVar(&updateFlag, "update", false, "Update synx to the latest version")
 
 	// Override the default help
 	rootCmd.SetHelpFunc(customHelp)
@@ -123,6 +125,7 @@ func customHelp(cmd *cobra.Command, args []string) {
 	fmt.Println(h("MODIFIERS"))
 	fmt.Printf("  %s              Target machine-specific config\n", c("-m, --machine"))
 	fmt.Printf("  %s                   Skip confirmations (bootstrap)\n", c("--yes"))
+	fmt.Printf("  %s                Update synx to the latest version\n", c("--update"))
 	fmt.Println()
 
 	fmt.Println(d("Run 'synx' with no flags to sync. Configs live in ~/.config/synx/"))

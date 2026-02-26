@@ -109,6 +109,11 @@ func init() {
 			return
 		}
 
+		if updateFlag {
+			runUpdate()
+			return
+		}
+
 		// Default sync action
 		runSync(cfg)
 	}
@@ -1275,4 +1280,100 @@ func runRemoteDiff(cfg *config.ConfigManager) {
 	resetCmd := exec.Command("git", "reset", "HEAD", "--quiet")
 	resetCmd.Dir = eng.DotfileDir
 	resetCmd.Run()
+}
+
+func runUpdate() {
+	ui.PrintHeader("⬆", "Self-Update")
+	fmt.Println()
+
+	// 1. Find the currently running binary
+	exePath, err := os.Executable()
+	if err != nil {
+		ui.Error("Cannot determine binary location: " + err.Error())
+		os.Exit(1)
+	}
+
+	// Resolve symlinks to find the real binary
+	realPath, err := filepath.EvalSymlinks(exePath)
+	if err != nil {
+		ui.Error("Cannot resolve binary path: " + err.Error())
+		os.Exit(1)
+	}
+
+	// 2. Find the source repo — binary lives in synx-go/, repo root is parent of that
+	binaryDir := filepath.Dir(realPath)
+	sourceDir := binaryDir // Assume binary is in synx-go/
+	goMod := filepath.Join(sourceDir, "go.mod")
+	if _, err := os.Stat(goMod); err != nil {
+		// Try one level up (maybe binary is in repo root)
+		sourceDir = filepath.Dir(binaryDir)
+		goMod = filepath.Join(sourceDir, "synx-go", "go.mod")
+		if _, err := os.Stat(goMod); err == nil {
+			sourceDir = filepath.Join(sourceDir, "synx-go")
+		} else {
+			ui.Error("Cannot find synx source directory")
+			ui.Detail("Binary at: " + realPath)
+			ui.Detail("Looked for go.mod in: " + binaryDir)
+			os.Exit(1)
+		}
+	}
+
+	// 3. Find the git repo root (could be parent of synx-go/)
+	repoDir := sourceDir
+	for repoDir != "/" {
+		if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
+			break
+		}
+		repoDir = filepath.Dir(repoDir)
+	}
+	if repoDir == "/" {
+		ui.Error("Cannot find git repository for synx source")
+		os.Exit(1)
+	}
+
+	ui.Step("Pulling latest changes...")
+	pullCmd := exec.Command("git", "pull", "--rebase")
+	pullCmd.Dir = repoDir
+	pullCmd.Stdout = os.Stdout
+	pullCmd.Stderr = os.Stderr
+	if err := pullCmd.Run(); err != nil {
+		ui.Error("Failed to pull: " + err.Error())
+		os.Exit(1)
+	}
+	ui.Success("Source updated")
+
+	// 4. Build new binary to temp file
+	fmt.Println()
+	ui.Step("Building new binary...")
+	tmpBin := realPath + ".new"
+	buildCmd := exec.Command("go", "build", "-o", tmpBin, ".")
+	buildCmd.Dir = sourceDir
+	buildCmd.Stderr = os.Stderr
+	if err := buildCmd.Run(); err != nil {
+		ui.Error("Build failed: " + err.Error())
+		os.Remove(tmpBin)
+		os.Exit(1)
+	}
+	ui.Success("Build complete")
+
+	// 5. Replace old binary with new one
+	ui.Step("Replacing binary...")
+	if err := os.Rename(tmpBin, realPath); err != nil {
+		ui.Error("Failed to replace binary: " + err.Error())
+		ui.Detail("New binary at: " + tmpBin)
+		os.Exit(1)
+	}
+	ui.Success("Binary updated at " + realPath)
+
+	// 6. Show the version we updated to
+	fmt.Println()
+	verCmd := exec.Command("git", "log", "--oneline", "-1")
+	verCmd.Dir = repoDir
+	out, err := verCmd.Output()
+	if err == nil {
+		ui.Info("Now at: " + strings.TrimSpace(string(out)))
+	}
+
+	fmt.Println()
+	ui.Success("synx updated successfully! 🎉")
 }
