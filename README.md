@@ -1,6 +1,6 @@
-# SYNX — Dotfile Backup System
+# SYNX — Dotfile (and sort of System) Manager
 
-A fast CLI tool for managing dotfiles with git-based version control, multi-machine support, profiles, and full system bootstrapping.
+A fast CLI tool for managing dotfiles with git-based version control, multi-machine support, profiles, and full system bootstrapping. This is a personal project and therefore a bit opinionated. It is made to be easy to use and understand, not to be the best or most feature-rich tool out there.
 
 ## Quick Start
 
