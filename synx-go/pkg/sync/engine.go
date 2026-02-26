@@ -17,6 +17,7 @@ type Engine struct {
 	ConfigDir  string
 	DotfileDir string
 	Config     *config.ConfigManager
+	DryRun     bool
 }
 
 func NewEngine(cfg *config.ConfigManager) (*Engine, error) {
@@ -74,12 +75,17 @@ func (e *Engine) SyncToRepo() (*SyncResult, error) {
 		}
 
 		if info.IsDir() {
-			err = e.copyDirWithExcludes(srcPath, destPath, target)
-			if err != nil {
-				ui.Error(fmt.Sprintf("%s %s", target, ui.StyleDim.Render(fmt.Sprintf("(copy failed: %v)", err))))
-				res.Skipped++
-			} else {
+			if e.DryRun {
+				ui.Success(fmt.Sprintf("%s %s", target, ui.StyleDim.Render("(would sync)")))
 				res.Synced++
+			} else {
+				err = e.copyDirWithExcludes(srcPath, destPath, target)
+				if err != nil {
+					ui.Error(fmt.Sprintf("%s %s", target, ui.StyleDim.Render(fmt.Sprintf("(copy failed: %v)", err))))
+					res.Skipped++
+				} else {
+					res.Synced++
+				}
 			}
 		} else {
 			if e.Config.IsExcluded(target) {
@@ -87,51 +93,58 @@ func (e *Engine) SyncToRepo() (*SyncResult, error) {
 				res.Skipped++
 				continue
 			}
-			err = e.copyFile(srcPath, destPath)
-			if err != nil {
-				ui.Error(fmt.Sprintf("%s %s", target, ui.StyleDim.Render(fmt.Sprintf("(copy failed: %v)", err))))
-				res.Skipped++
-			} else {
-				ui.Success(target)
+			if e.DryRun {
+				ui.Success(fmt.Sprintf("%s %s", target, ui.StyleDim.Render("(would sync)")))
 				res.Synced++
+			} else {
+				err = e.copyFile(srcPath, destPath)
+				if err != nil {
+					ui.Error(fmt.Sprintf("%s %s", target, ui.StyleDim.Render(fmt.Sprintf("(copy failed: %v)", err))))
+					res.Skipped++
+				} else {
+					ui.Success(target)
+					res.Synced++
+				}
 			}
 		}
 	}
 
-	// Backup internal configs
-	synxDataDir := filepath.Join(e.DotfileDir, ".synx")
-	os.MkdirAll(synxDataDir, 0755)
+	if !e.DryRun {
+		// Backup internal configs
+		synxDataDir := filepath.Join(e.DotfileDir, ".synx")
+		os.MkdirAll(synxDataDir, 0755)
 
-	bsSrc := filepath.Join(e.Config.ConfigDir, "bootstrap.conf")
-	bsDst := filepath.Join(synxDataDir, "bootstrap.conf")
-	if _, err := os.Stat(bsSrc); err == nil {
-		e.copyFile(bsSrc, bsDst)
-	}
-
-	synxSrc := e.Config.SynxConfig
-	synxDst := filepath.Join(synxDataDir, "synx.conf")
-	if _, err := os.Stat(synxSrc); err == nil {
-		e.copyFile(synxSrc, synxDst)
-	}
-
-	excSrc := e.Config.ExcludeCfg
-	excDst := filepath.Join(synxDataDir, "exclude.conf")
-	if _, err := os.Stat(excSrc); err == nil {
-		e.copyFile(excSrc, excDst)
-	}
-
-	// Backup machine-specific configs
-	if e.Config.Hostname != "" {
-		machSynxSrc := e.Config.SynxConfigMachine
-		machSynxDst := filepath.Join(synxDataDir, "synx.conf."+e.Config.Hostname)
-		if _, err := os.Stat(machSynxSrc); err == nil {
-			e.copyFile(machSynxSrc, machSynxDst)
+		bsSrc := filepath.Join(e.Config.ConfigDir, "bootstrap.conf")
+		bsDst := filepath.Join(synxDataDir, "bootstrap.conf")
+		if _, err := os.Stat(bsSrc); err == nil {
+			e.copyFile(bsSrc, bsDst)
 		}
 
-		machExcSrc := e.Config.ExcludeCfgMachine
-		machExcDst := filepath.Join(synxDataDir, "exclude.conf."+e.Config.Hostname)
-		if _, err := os.Stat(machExcSrc); err == nil {
-			e.copyFile(machExcSrc, machExcDst)
+		synxSrc := e.Config.SynxConfig
+		synxDst := filepath.Join(synxDataDir, "synx.conf")
+		if _, err := os.Stat(synxSrc); err == nil {
+			e.copyFile(synxSrc, synxDst)
+		}
+
+		excSrc := e.Config.ExcludeCfg
+		excDst := filepath.Join(synxDataDir, "exclude.conf")
+		if _, err := os.Stat(excSrc); err == nil {
+			e.copyFile(excSrc, excDst)
+		}
+
+		// Backup machine-specific configs
+		if e.Config.Hostname != "" {
+			machSynxSrc := e.Config.SynxConfigMachine
+			machSynxDst := filepath.Join(synxDataDir, "synx.conf."+e.Config.Hostname)
+			if _, err := os.Stat(machSynxSrc); err == nil {
+				e.copyFile(machSynxSrc, machSynxDst)
+			}
+
+			machExcSrc := e.Config.ExcludeCfgMachine
+			machExcDst := filepath.Join(synxDataDir, "exclude.conf."+e.Config.Hostname)
+			if _, err := os.Stat(machExcSrc); err == nil {
+				e.copyFile(machExcSrc, machExcDst)
+			}
 		}
 	}
 

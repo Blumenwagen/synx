@@ -217,3 +217,71 @@ func (g *GitManager) LsFiles() ([]string, error) {
 	}
 	return result, nil
 }
+
+// DiffNameStatus returns file-level status between working tree and HEAD.
+// Each entry is like "M\tpath/to/file" or "A\tpath/to/file".
+func (g *GitManager) DiffNameStatus() ([]string, error) {
+	cmd := exec.Command("git", "diff", "--name-status", "HEAD")
+	cmd.Dir = g.RepoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	raw := strings.TrimSpace(string(out))
+	if raw == "" {
+		return []string{}, nil
+	}
+	return strings.Split(raw, "\n"), nil
+}
+
+// DiffAgainstRemote returns the full diff between local and remote branch.
+func (g *GitManager) DiffAgainstRemote(branch string) (string, error) {
+	cmd := exec.Command("git", "diff", "origin/"+branch, "--", ".")
+	cmd.Dir = g.RepoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+// DiffStatRemote returns a --stat summary of differences with remote.
+func (g *GitManager) DiffStatRemote(branch string) (string, error) {
+	cmd := exec.Command("git", "diff", "--stat", "origin/"+branch, "--", ".")
+	cmd.Dir = g.RepoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// RemoteURL returns the remote origin URL.
+func (g *GitManager) RemoteURL() (string, error) {
+	cmd := exec.Command("git", "remote", "get-url", "origin")
+	cmd.Dir = g.RepoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// UnpushedCount returns the number of commits ahead of the remote.
+func (g *GitManager) UnpushedCount(branch string) (int, error) {
+	cmd := exec.Command("git", "rev-list", "--count", "origin/"+branch+"..HEAD")
+	cmd.Dir = g.RepoDir
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, nil // If no upstream, return 0
+	}
+	raw := strings.TrimSpace(string(out))
+	if raw == "" {
+		return 0, nil
+	}
+	count := 0
+	fmt.Sscanf(raw, "%d", &count)
+	return count, nil
+}
