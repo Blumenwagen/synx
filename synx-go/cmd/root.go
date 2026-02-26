@@ -139,6 +139,7 @@ func customHelp(cmd *cobra.Command, args []string) {
 	fmt.Printf("  %s              Target machine-specific config\n", c("-m, --machine"))
 	fmt.Printf("  %s                   Skip confirmations (bootstrap)\n", c("--yes"))
 	fmt.Printf("  %s                Update synx to the latest version\n", c("--update"))
+	fmt.Printf("  %s               Print the current synx version\n", c("-v, --version"))
 	fmt.Println()
 
 	// Packages & Services
