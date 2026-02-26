@@ -486,13 +486,55 @@ func runAdd(cfg *config.ConfigManager, target string) {
 			return
 		}
 	}
-	cfg.Targets = append(cfg.Targets, target)
+
 	if machineFlag {
+		// Explicitly targeting machine config
+		cfg.Targets = append(cfg.Targets, target)
 		cfg.SaveTargetsMachine(cfg.Targets)
 		ui.Success("Added '" + target + "' to tracked dotfiles (" + cfg.Hostname + ")")
-	} else {
-		cfg.SaveTargets(cfg.Targets)
-		ui.Success("Added '" + target + "' to tracked dotfiles")
+		return
+	}
+
+	// Add to base config
+	baseTargets, _ := readBaseTargets(cfg)
+	alreadyInBase := false
+	for _, bt := range baseTargets {
+		if bt == target {
+			alreadyInBase = true
+			break
+		}
+	}
+	if !alreadyInBase {
+		baseTargets = append(baseTargets, target)
+		cfg.SaveTargets(baseTargets)
+		ui.Success("Added '" + target + "' to base tracked dotfiles")
+	}
+
+	// If using machine-specific targets, prompt to also add there
+	if cfg.UsingMachineTargets {
+		ui.Warn("You're using machine-specific targets on this machine (" + cfg.Hostname + ")")
+		ui.Info("Adding to base config alone won't affect this machine.")
+		fmt.Printf("  %s Also add '%s' to %s config? [y/n]: ", ui.StyleCyan.Render("▸"), target, cfg.Hostname)
+
+		var choice string
+		fmt.Scanln(&choice)
+		choice = strings.ToLower(strings.TrimSpace(choice))
+
+		if choice == "y" || choice == "yes" {
+			machineTargets, _ := cfg.MachineTargets()
+			// Check if already in machine config
+			for _, mt := range machineTargets {
+				if mt == target {
+					ui.Info("'" + target + "' is already in machine config")
+					return
+				}
+			}
+			machineTargets = append(machineTargets, target)
+			cfg.SaveTargetsMachine(machineTargets)
+			ui.Success("Added '" + target + "' to machine targets (" + cfg.Hostname + ")")
+		} else {
+			ui.Detail("Skipped — only added to base config")
+		}
 	}
 }
 
