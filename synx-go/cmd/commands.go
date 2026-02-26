@@ -1458,20 +1458,25 @@ func runUpdate() {
 		os.Exit(1)
 	}
 
-	ui.Step("Replacing binary...")
-	tmpBin := realPath + ".old"
-	os.Rename(realPath, tmpBin) // Move current out of the way
+	// If build.sh already compiled in-place (newBin == realPath), no rename needed
+	if newBin == realPath {
+		ui.Success("Binary updated in-place at " + realPath)
+	} else {
+		ui.Step("Replacing binary...")
+		tmpBin := realPath + ".old"
+		os.Rename(realPath, tmpBin) // Move current out of the way
 
-	if err := os.Rename(newBin, realPath); err != nil {
-		// Rollback if replace fails
-		os.Rename(tmpBin, realPath)
-		ui.Error("Failed to replace binary: " + err.Error())
-		os.Exit(1)
+		if err := os.Rename(newBin, realPath); err != nil {
+			// Rollback if replace fails
+			os.Rename(tmpBin, realPath)
+			ui.Error("Failed to replace binary: " + err.Error())
+			os.Exit(1)
+		}
+		// Delete the old binary on success
+		os.Remove(tmpBin)
+
+		ui.Success("Binary updated at " + realPath)
 	}
-	// Delete the old binary on success
-	os.Remove(tmpBin)
-
-	ui.Success("Binary updated at " + realPath)
 
 	// 6. Show the version we updated to
 	fmt.Println()
