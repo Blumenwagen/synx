@@ -13,13 +13,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var (
-	trackedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	untrackedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	machineStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
-	detailTitle    = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true).Underline(true)
-)
-
 type dotfileItem struct {
 	name          string
 	isTracked     bool
@@ -31,19 +24,19 @@ type dotfileItem struct {
 func (i dotfileItem) Title() string {
 	if i.isTracked {
 		if i.isMachineOnly {
-			return trackedStyle.Render("✓ ") + machineStyle.Render(i.name)
+			return TUITrackedStyle.Render("✓ ") + TUIMachineStyle.Render(i.name)
 		}
-		return trackedStyle.Render("✓ " + i.name)
+		return TUITrackedStyle.Render("✓ " + i.name)
 	}
-	return untrackedStyle.Render("• " + i.name)
+	return TUIMutedStyle.Render("• " + i.name)
 }
 
 func (i dotfileItem) Description() string {
 	if !i.exists {
-		return "Missing in ~/.config"
+		return StyleYellow.Render("Missing in ~/.config")
 	}
 	if i.isSymlink {
-		return "Symlinked"
+		return StyleCyan.Render("Symlinked")
 	}
 	return "Local Directory"
 }
@@ -83,7 +76,7 @@ func (m listModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.WindowSizeMsg:
-		h, v := docStyle.GetFrameSize()
+		h, v := TUIDocStyle.GetFrameSize()
 		m.list.SetSize(msg.Width/2-h-2, msg.Height-v-2)
 
 		if !m.ready {
@@ -103,18 +96,18 @@ func (m listModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if i, ok := m.list.SelectedItem().(dotfileItem); ok {
 		var b strings.Builder
 
-		b.WriteString(detailTitle.Render(i.name) + "\n\n")
+		b.WriteString(TUIHeadingStyle.Render(i.name) + "\n\n")
 
 		if i.isTracked {
-			b.WriteString(trackedStyle.Render("Status: Tracked by Synx") + "\n")
+			b.WriteString(TUITrackedStyle.Render("Status: Tracked by Synx") + "\n")
 			if i.isMachineOnly {
-				b.WriteString(machineStyle.Render(fmt.Sprintf("Scope: %s overrides only", m.cfg.Hostname)) + "\n")
+				b.WriteString(TUIMachineStyle.Render(fmt.Sprintf("Scope: %s overrides only", m.cfg.Hostname)) + "\n")
 			} else {
 				b.WriteString("Scope: Base configuration\n")
 			}
 		} else {
-			b.WriteString(untrackedStyle.Render("Status: Untracked") + "\n")
-			b.WriteString("\nPress [Enter] to add to synx.\n")
+			b.WriteString(TUIMutedStyle.Render("Status: Untracked") + "\n")
+			b.WriteString("\n" + TUIActiveStyle.Render("Press [Enter] to add to synx.") + "\n")
 		}
 
 		b.WriteString("\n")
@@ -140,10 +133,10 @@ func (m listModel) View() string {
 		return ""
 	}
 
-	left := listPaneStyle.Render(m.list.View())
-	right := diffPaneStyle.Render(m.viewport.View())
+	left := TUIPaneStyle.Render(m.list.View())
+	right := TUIDetailPaneStyle.Render(m.viewport.View())
 
-	return docStyle.Render(lipgloss.JoinHorizontal(lipgloss.Top, left, right))
+	return TUIDocStyle.Render(lipgloss.JoinHorizontal(lipgloss.Top, left, right))
 }
 
 // RunListTUI launches the interactive dashboard for browsing and adding dotfiles.
@@ -215,8 +208,10 @@ func RunListTUI(cfg *config.ConfigManager) (string, error) {
 		}
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	delegate := ThemedDelegate()
+	l := list.New(items, delegate, 0, 0)
 	l.Title = "Synx Tracked & Available Dotfiles"
+	l.Styles.Title = TUITitleStyle
 
 	m := listModel{
 		list: l,

@@ -11,21 +11,16 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var (
-	docStyle      = lipgloss.NewStyle().Margin(1, 2)
-	titleStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
-	diffPaneStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1, 2).BorderForeground(lipgloss.Color("63"))
-	listPaneStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("63"))
-)
-
 type commitItem struct {
 	commit git.Commit
 	index  int // steps back (1-indexed from HEAD)
 }
 
-func (i commitItem) Title() string { return fmt.Sprintf("%s - %s", i.commit.Hash, i.commit.Message) }
+func (i commitItem) Title() string {
+	return fmt.Sprintf("%s - %s", StyleCyan.Render(i.commit.Hash), i.commit.Message)
+}
 func (i commitItem) Description() string {
-	return fmt.Sprintf("%s (%s)", i.commit.Author, i.commit.Date)
+	return StyleDim.Render(fmt.Sprintf("%s (%s)", i.commit.Author, i.commit.Date))
 }
 func (i commitItem) FilterValue() string { return i.commit.Message }
 
@@ -62,7 +57,7 @@ func (m rollbackModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.WindowSizeMsg:
-		h, v := docStyle.GetFrameSize()
+		h, v := TUIDocStyle.GetFrameSize()
 		m.list.SetSize(msg.Width/2-h-2, msg.Height-v-2)
 
 		if !m.ready {
@@ -93,7 +88,7 @@ func (m rollbackModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.detailCache[hash] = stat
 		}
 
-		content := titleStyle.Render(fmt.Sprintf("Files changed in %s", hash)) + "\n\n" + stat
+		content := TUITitleStyle.Render(fmt.Sprintf("Files changed in %s", hash)) + "\n\n" + stat
 		m.viewport.SetContent(content)
 	}
 
@@ -108,10 +103,10 @@ func (m rollbackModel) View() string {
 		return ""
 	}
 
-	left := listPaneStyle.Render(m.list.View())
-	right := diffPaneStyle.Render(m.viewport.View())
+	left := TUIPaneStyle.Render(m.list.View())
+	right := TUIDetailPaneStyle.Render(m.viewport.View())
 
-	return docStyle.Render(lipgloss.JoinHorizontal(lipgloss.Top, left, right))
+	return TUIDocStyle.Render(lipgloss.JoinHorizontal(lipgloss.Top, left, right))
 }
 
 // RunRollbackTUI launches the interactive commit selector.
@@ -132,8 +127,10 @@ func RunRollbackTUI(gitMgr *git.GitManager) (int, error) {
 		items[i] = commitItem{commit: c, index: i + 1}
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	delegate := ThemedDelegate()
+	l := list.New(items, delegate, 0, 0)
 	l.Title = "Select Commit to Rollback To"
+	l.Styles.Title = TUITitleStyle
 
 	m := rollbackModel{
 		list:        l,

@@ -111,7 +111,6 @@ func (r *Runner) runReposStep() {
 		return
 	}
 
-	// Simplified repo cloning logic for brevity
 	for _, repo := range r.Config.Repos {
 		ui.SubStep(repo.URL)
 
@@ -144,12 +143,100 @@ func (r *Runner) runReposStep() {
 
 func (r *Runner) runDMStep() {
 	ui.Step("Step 4: Display Manager")
-	// Similar simplified logic matching fish
 	if r.Config.DMName == "" {
-		ui.Detail("(skipped)")
-	} else {
-		ui.Success(r.Config.DMName + " setup configured (skipping explicit install for brevity in porting)")
+		ui.Detail("(skipped — not configured)")
+		return
 	}
+
+	dm := r.Config.DMName
+
+	// 1. Install the DM package
+	ui.SubStep("Installing " + dm + "...")
+	installer := r.getInstaller()
+	args := append(strings.Split(installer, " "), dm)
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		ui.Error("Failed to install " + dm + ": " + err.Error())
+		return
+	}
+	ui.Success(dm + " installed")
+
+	// 2. Enable the DM service
+	ui.SubStep("Enabling " + dm + " service...")
+	enableCmd := exec.Command("sudo", "systemctl", "enable", dm+".service")
+	enableCmd.Stdout = os.Stdout
+	enableCmd.Stderr = os.Stderr
+	if err := enableCmd.Run(); err != nil {
+		ui.Warn("Could not enable " + dm + " service: " + err.Error())
+		ui.Detail("You may need to enable it manually: sudo systemctl enable " + dm)
+	} else {
+		ui.Success(dm + " service enabled")
+	}
+
+	// 3. Handle theme installation if configured
+	if r.Config.DMTheme != "" {
+		r.installDMTheme(dm)
+	}
+}
+
+func (r *Runner) installDMTheme(dm string) {
+	theme := r.Config.DMTheme
+	ui.SubStep("Installing theme: " + theme)
+
+	if r.Config.DMThemeSource != "" && strings.HasPrefix(r.Config.DMThemeSource, "http") {
+		// Git-based theme installation
+		home, _ := os.UserHomeDir()
+		dest := home + "/.local/share/" + dm + "/themes/" + theme
+		g := git.NewGitManager(dest)
+		if err := g.Clone(r.Config.DMThemeSource, dest); err != nil {
+			ui.Error("Failed to clone theme: " + err.Error())
+			return
+		}
+		ui.Success("Theme cloned to " + dest)
+	} else {
+		// Package-based theme installation
+		installer := r.getInstaller()
+		args := append(strings.Split(installer, " "), theme)
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			ui.Error("Failed to install theme package: " + err.Error())
+			return
+		}
+		ui.Success("Theme package installed")
+	}
+
+	// Apply SDDM theme config if applicable
+	if dm == "sddm" {
+		ui.SubStep("Configuring SDDM theme...")
+		confDir := "/etc/sddm.conf.d"
+		confFile := confDir + "/theme.conf"
+
+		mkdirCmd := exec.Command("sudo", "mkdir", "-p", confDir)
+		mkdirCmd.Run()
+
+		content := fmt.Sprintf("[Theme]\nCurrent=%s\n", theme)
+		writeCmd := exec.Command("sudo", "tee", confFile)
+		writeCmd.Stdin = strings.NewReader(content)
+		if err := writeCmd.Run(); err != nil {
+			ui.Warn("Could not write SDDM theme config: " + err.Error())
+			ui.Detail("Manually set [Theme] Current=" + theme + " in /etc/sddm.conf")
+		} else {
+			ui.Success("SDDM theme set to " + theme)
+		}
+	}
+}
+
+func (r *Runner) getInstaller() string {
+	if r.Config.AurHelper != "" {
+		if _, err := exec.LookPath(r.Config.AurHelper); err == nil {
+			return r.Config.AurHelper + " -S --needed --noconfirm"
+		}
+	}
+	return "sudo pacman -S --needed --noconfirm"
 }
 
 func (r *Runner) runCommandsStep() {

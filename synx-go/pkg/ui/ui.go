@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -73,4 +74,50 @@ func Bullet(msg string) {
 
 func Detail(msg string) {
 	fmt.Printf("    %s %s\n", StyleDim.Render("→"), StyleDim.Render(msg))
+}
+
+// ──────────────────────────────────────────────
+// Shared TUI Styles (for Bubbletea screens)
+// ──────────────────────────────────────────────
+
+var (
+	// Layout styles
+	TUIDocStyle  = lipgloss.NewStyle().Margin(1, 2)
+	TUIPaneStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			Padding(0, 1).
+			BorderForeground(Blue)
+	TUIDetailPaneStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				Padding(1, 2).
+				BorderForeground(Blue)
+
+	// Text styles for TUI content
+	TUITitleStyle   = lipgloss.NewStyle().Foreground(Magenta).Bold(true)
+	TUIHeadingStyle = lipgloss.NewStyle().Foreground(Magenta).Bold(true).Underline(true)
+	TUITrackedStyle = lipgloss.NewStyle().Foreground(Green)
+	TUIMutedStyle   = lipgloss.NewStyle().Foreground(Dim)
+	TUIMachineStyle = lipgloss.NewStyle().Foreground(Magenta).Bold(true)
+	TUIActiveStyle  = lipgloss.NewStyle().Foreground(Cyan).Bold(true)
+)
+
+// ThemedDelegate returns a Bubbles list delegate styled with Catppuccin Mocha colors.
+func ThemedDelegate() list.DefaultDelegate {
+	d := list.NewDefaultDelegate()
+
+	// Selected item: sapphire foreground with bold
+	d.Styles.SelectedTitle = d.Styles.SelectedTitle.
+		Foreground(Cyan).
+		BorderForeground(Cyan)
+	d.Styles.SelectedDesc = d.Styles.SelectedDesc.
+		Foreground(Blue).
+		BorderForeground(Cyan)
+
+	// Normal items: text color
+	d.Styles.NormalTitle = d.Styles.NormalTitle.
+		Foreground(lipgloss.Color("#cdd6f4")) // Catppuccin text
+	d.Styles.NormalDesc = d.Styles.NormalDesc.
+		Foreground(Dim)
+
+	return d
 }
