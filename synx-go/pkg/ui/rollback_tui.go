@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Blumenwagen/synx/pkg/git"
 	"github.com/charmbracelet/bubbles/list"
@@ -141,7 +142,7 @@ func RunRollbackTUI(gitMgr *git.GitManager) (int, error) {
 		detailCache: make(map[string]string),
 	}
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithInput(os.Stdin), tea.WithOutput(os.Stderr))
 	finalModel, err := p.Run()
 	if err != nil {
 		return 0, err

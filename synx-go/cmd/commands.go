@@ -46,7 +46,7 @@ func init() {
 			return
 		}
 
-		if rollbackFlag > 0 {
+		if rollbackFlag >= 0 {
 			runRollback(cfg, rollbackFlag)
 			return
 		}
@@ -58,6 +58,11 @@ func init() {
 
 		if removeFlag != "" {
 			runRemove(cfg, removeFlag)
+			return
+		}
+
+		if cleanFlag {
+			runClean(cfg)
 			return
 		}
 
@@ -336,96 +341,18 @@ func runRestore(cfg *config.ConfigManager) {
 }
 
 func runList(cfg *config.ConfigManager) {
-	title := "List Dotfiles"
-	if cfg.Hostname != "" {
-		title += " (" + cfg.Hostname + ")"
-	}
-	ui.PrintHeader("📋", title)
-	if cfg.UsingMachineTargets {
-		ui.Detail("Using machine-specific targets from synx.conf." + cfg.Hostname)
+	// Launch the interactive dashboard
+	targetToAdd, err := ui.RunListTUI(cfg)
+	if err != nil {
+		ui.Error("List UI error: " + err.Error())
+		os.Exit(1)
 	}
 
-	home, _ := os.UserHomeDir()
-	baseConfigDir := home + "/.config"
-
-	fmt.Println(ui.StyleBold.Render("TRACKED DOTFILES:"))
-	if len(cfg.Targets) == 0 {
-		ui.Detail("(none)")
-	} else {
-		// Build a set of machine-only targets (not in base) for annotation
-		machineOnlySet := make(map[string]bool)
-		if cfg.UsingMachineTargets {
-			baseTargets, _ := readBaseTargets(cfg)
-			baseSet := make(map[string]bool)
-			for _, bt := range baseTargets {
-				baseSet[bt] = true
-			}
-			for _, t := range cfg.Targets {
-				if !baseSet[t] {
-					machineOnlySet[t] = true
-				}
-			}
-		}
-
-		for _, t := range cfg.Targets {
-			path := baseConfigDir + "/" + t
-			info, err := os.Lstat(path)
-
-			var tags []string
-			if err != nil {
-				tags = append(tags, "not found")
-			} else if info.Mode()&os.ModeSymlink != 0 {
-				tags = append(tags, "symlink")
-			}
-			if machineOnlySet[t] {
-				tags = append(tags, cfg.Hostname+" only")
-			}
-
-			label := t
-			if len(tags) > 0 {
-				label += " " + ui.StyleDim.Render("("+strings.Join(tags, ", ")+")")
-			}
-
-			if err != nil {
-				ui.Error(label)
-			} else {
-				ui.Success(label)
-			}
-		}
+	// If the user selected an untracked dotfile and pressed enter, pipe it to runAdd
+	if targetToAdd != "" {
+		fmt.Println()
+		runAdd(cfg, targetToAdd)
 	}
-
-	fmt.Println()
-	fmt.Println(ui.StyleBold.Render("AVAILABLE DOTFILES:"))
-	// Simple lookup in ~/.config
-	entries, _ := os.ReadDir(baseConfigDir)
-	var available []string
-
-	targetMap := make(map[string]bool)
-	for _, t := range cfg.Targets {
-		targetMap[t] = true
-	}
-
-	for _, e := range entries {
-		if !targetMap[e.Name()] && !strings.HasPrefix(e.Name(), ".") {
-			available = append(available, e.Name())
-		}
-	}
-
-	if len(available) == 0 {
-		ui.Detail("(all tracked)")
-	} else {
-		max := 10
-		if len(available) < max {
-			max = len(available)
-		}
-		for i := 0; i < max; i++ {
-			ui.Bullet(available[i])
-		}
-		if len(available) > 10 {
-			ui.Detail(fmt.Sprintf("... and %d more", len(available)-10))
-		}
-	}
-	fmt.Println()
 }
 
 func runHistory(cfg *config.ConfigManager) {
@@ -479,7 +406,18 @@ func runRollback(cfg *config.ConfigManager, steps int) {
 		}
 	}
 
-	ui.PrintHeader("⏪", "Rollback")
+	title := "Rollback"
+	if dryRunFlag {
+		title = "Rollback (DRY RUN)"
+	}
+	ui.PrintHeader("⏪", title)
+
+	if dryRunFlag {
+		ui.Info(fmt.Sprintf("Would roll back %d commit(s)", steps))
+		ui.Info("Would force-push to remote and run dotfile restore")
+		return
+	}
+
 	fmt.Println(ui.StyleYellow.Render("⚠ WARNING"))
 	fmt.Println("  This will reset your dotfiles repo to " + strconv.Itoa(steps) + " commit(s) ago.")
 	fmt.Println("  Current changes will be lost, and the remote GitHub repository")
@@ -588,6 +526,109 @@ func runRemove(cfg *config.ConfigManager, target string) {
 	} else {
 		cfg.SaveTargets(cfg.Targets)
 		ui.Success("Removed '" + target + "' from tracked dotfiles")
+	}
+}
+
+func runClean(cfg *config.ConfigManager) {
+	ui.PrintHeader("🧹", "Clean Repository")
+
+	// Get ALL tracked targets across all synx.conf files
+	globalTargets, err := cfg.GetGlobalTargets()
+	if err != nil {
+		ui.Error("Failed to read global targets: " + err.Error())
+		os.Exit(1)
+	}
+
+	eng, _ := sync.NewEngine(cfg)
+	g := git.NewGitManager(eng.DotfileDir)
+
+	if !g.IsRepo() {
+		ui.Error("Not a git repository.")
+		os.Exit(1)
+	}
+
+	// Create a fast lookup map for safe files/directories
+	safeSet := map[string]bool{
+		".git":       true,
+		".synx":      true,
+		".github":    true,
+		"README.md":  true,
+		"LICENSE":    true,
+		"install.sh": true,
+	}
+
+	for _, t := range globalTargets {
+		safeSet[t] = true
+	}
+
+	entries, err := os.ReadDir(eng.DotfileDir)
+	if err != nil {
+		ui.Error("Failed to read dotfiles repository: " + err.Error())
+		os.Exit(1)
+	}
+
+	var orphans []string
+	for _, e := range entries {
+		name := e.Name()
+		if !safeSet[name] {
+			orphans = append(orphans, name)
+		}
+	}
+
+	if len(orphans) == 0 {
+		ui.Success("Repository is clean. No orphaned dotfiles found.")
+		return
+	}
+
+	ui.Warn(fmt.Sprintf("Found %d orphaned item(s) in repository:", len(orphans)))
+	for _, o := range orphans {
+		ui.Bullet(ui.StyleRed.Render(o))
+	}
+
+	fmt.Println()
+	fmt.Printf("  %s Delete these from the repository? [y/N]: ", ui.StyleYellow.Render("⚠"))
+
+	var choice string
+	fmt.Scanln(&choice)
+	choice = strings.ToLower(strings.TrimSpace(choice))
+
+	if choice == "y" || choice == "yes" {
+		ui.Step("Removing orphaned items...")
+		for _, o := range orphans {
+			err := os.RemoveAll(filepath.Join(eng.DotfileDir, o))
+			if err != nil {
+				ui.Error("Failed to remove " + o + ": " + err.Error())
+			}
+		}
+
+		if !g.HasChanges() {
+			ui.Success("Removed orphaned items (no git tracking changes needed)")
+		} else {
+			err := g.Commit("Cleaned orphaned dotfiles")
+			if err != nil {
+				ui.Error("Failed to commit cleanup: " + err.Error())
+			} else {
+				ui.Success("Cleaned and committed successfully")
+
+				// Prompt for push
+				fmt.Printf("  %s Push changes to remote? [Y/n]: ", ui.StyleCyan.Render("▸"))
+				var pushChoice string
+				fmt.Scanln(&pushChoice)
+				pushChoice = strings.ToLower(strings.TrimSpace(pushChoice))
+
+				if pushChoice == "" || pushChoice == "y" || pushChoice == "yes" {
+					branch, _ := g.CurrentBranch()
+					ui.Step("Pushing to remote...")
+					if err := g.Push(branch, false); err != nil {
+						ui.Error("Failed to push: " + err.Error())
+					} else {
+						ui.Success("Pushed successfully")
+					}
+				}
+			}
+		}
+	} else {
+		ui.Detail("Cleanup aborted.")
 	}
 }
 

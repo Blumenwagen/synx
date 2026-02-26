@@ -127,10 +127,42 @@ func (c *ConfigManager) MachineExcludes() ([]string, error) {
 
 // MachineTargets returns only the machine-specific targets.
 func (c *ConfigManager) MachineTargets() ([]string, error) {
-	if _, err := os.Stat(c.SynxConfigMachine); os.IsNotExist(err) {
-		return []string{}, nil
+	if _, err := os.Stat(c.SynxConfigMachine); err == nil {
+		return readFileLines(c.SynxConfigMachine)
 	}
-	return readFileLines(c.SynxConfigMachine)
+	return []string{}, nil
+}
+
+// GetGlobalTargets scans all synx.conf* files in ~/.config/synx
+// and returns a deduplicated list of all tracked dotfiles across all machines.
+func (c *ConfigManager) GetGlobalTargets() ([]string, error) {
+	globalSet := make(map[string]bool)
+
+	entries, err := os.ReadDir(c.ConfigDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config dir: %w", err)
+	}
+
+	for _, e := range entries {
+		name := e.Name()
+		// Match synx.conf and synx.conf.<hostname>
+		if strings.HasPrefix(name, "synx.conf") && !e.IsDir() {
+			path := filepath.Join(c.ConfigDir, name)
+			lines, err := readFileLines(path)
+			if err != nil {
+				continue
+			}
+			for _, line := range lines {
+				globalSet[line] = true
+			}
+		}
+	}
+
+	var allTargets []string
+	for t := range globalSet {
+		allTargets = append(allTargets, t)
+	}
+	return allTargets, nil
 }
 
 func (c *ConfigManager) IsExcluded(path string) bool {

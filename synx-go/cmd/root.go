@@ -42,6 +42,7 @@ var (
 	profileDeleteFlag string
 	remoteDiffFlag    bool
 	updateFlag        bool
+	cleanFlag         bool
 )
 
 func init() {
@@ -53,6 +54,7 @@ func init() {
 	rootCmd.Flag("rollback").NoOptDefVal = "0"
 	rootCmd.Flags().StringVar(&addFlag, "add", "", "Add a dotfile to track")
 	rootCmd.Flags().StringVar(&removeFlag, "remove", "", "Remove a dotfile from tracking")
+	rootCmd.Flags().BoolVar(&cleanFlag, "clean", false, "Clean untracked/orphaned dotfiles from the repository")
 	rootCmd.Flags().StringVar(&excludeFlag, "exclude", "", "Add exclude pattern and remove from repo")
 	rootCmd.Flags().BoolVar(&bsSetupFlag, "bootstrap-setup", false, "Create bootstrap config interactively")
 	rootCmd.Flags().StringVar(&bootstrapFlag, "bootstrap", "", "Run bootstrap from local config or clone provided repo URL")
@@ -103,6 +105,7 @@ func customHelp(cmd *cobra.Command, args []string) {
 	fmt.Println(h("TARGET MANAGEMENT"))
 	fmt.Printf("  %s %s               Track a new dotfile directory\n", g("synx"), c("--add <name>"))
 	fmt.Printf("  %s %s            Stop tracking a dotfile\n", g("synx"), c("--remove <name>"))
+	fmt.Printf("  %s %s             Clean orphaned files from repo\n", g("synx"), c("--clean"))
 	fmt.Printf("  %s %s          Exclude a file pattern\n", g("synx"), c("--exclude <path>"))
 	fmt.Printf("  %s %s                      List tracked dotfiles\n", g("synx"), c("--list"))
 	fmt.Printf("  %s %s              Rollback n commits\n", g("synx"), c("--rollback <n>"))
