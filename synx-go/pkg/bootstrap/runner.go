@@ -150,7 +150,6 @@ func (r *Runner) runDMStep() {
 
 	dm := r.Config.DMName
 
-	// 1. Install the DM package
 	ui.SubStep("Installing " + dm + "...")
 	installer := r.getInstaller()
 	args := append(strings.Split(installer, " "), dm)
@@ -163,7 +162,6 @@ func (r *Runner) runDMStep() {
 	}
 	ui.Success(dm + " installed")
 
-	// 2. Enable the DM service
 	ui.SubStep("Enabling " + dm + " service...")
 	enableCmd := exec.Command("sudo", "systemctl", "enable", dm+".service")
 	enableCmd.Stdout = os.Stdout
@@ -175,7 +173,6 @@ func (r *Runner) runDMStep() {
 		ui.Success(dm + " service enabled")
 	}
 
-	// 3. Handle theme installation if configured
 	if r.Config.DMTheme != "" {
 		r.installDMTheme(dm)
 	}
@@ -186,7 +183,6 @@ func (r *Runner) installDMTheme(dm string) {
 	ui.SubStep("Installing theme: " + theme)
 
 	if r.Config.DMThemeSource != "" && strings.HasPrefix(r.Config.DMThemeSource, "http") {
-		// Git-based theme installation
 		home, _ := os.UserHomeDir()
 		dest := home + "/.local/share/" + dm + "/themes/" + theme
 		g := git.NewGitManager(dest)
@@ -196,7 +192,6 @@ func (r *Runner) installDMTheme(dm string) {
 		}
 		ui.Success("Theme cloned to " + dest)
 	} else {
-		// Package-based theme installation
 		installer := r.getInstaller()
 		args := append(strings.Split(installer, " "), theme)
 		cmd := exec.Command(args[0], args[1:]...)
@@ -209,7 +204,6 @@ func (r *Runner) installDMTheme(dm string) {
 		ui.Success("Theme package installed")
 	}
 
-	// Apply SDDM theme config if applicable
 	if dm == "sddm" {
 		ui.SubStep("Configuring SDDM theme...")
 		confDir := "/etc/sddm.conf.d"

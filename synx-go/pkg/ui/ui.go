@@ -26,7 +26,6 @@ var (
 	StyleBlue    = lipgloss.NewStyle().Foreground(Blue)
 	StyleMagenta = lipgloss.NewStyle().Foreground(Magenta)
 
-	// Box drawing
 	BoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(Cyan).
@@ -76,12 +75,9 @@ func Detail(msg string) {
 	fmt.Printf("    %s %s\n", StyleDim.Render("→"), StyleDim.Render(msg))
 }
 
-// ──────────────────────────────────────────────
 // Shared TUI Styles (for Bubbletea screens)
-// ──────────────────────────────────────────────
 
 var (
-	// Layout styles
 	TUIDocStyle  = lipgloss.NewStyle().Margin(1, 2)
 	TUIPaneStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -92,7 +88,6 @@ var (
 				Padding(1, 2).
 				BorderForeground(Blue)
 
-	// Text styles for TUI content
 	TUITitleStyle   = lipgloss.NewStyle().Foreground(Magenta).Bold(true)
 	TUIHeadingStyle = lipgloss.NewStyle().Foreground(Magenta).Bold(true).Underline(true)
 	TUITrackedStyle = lipgloss.NewStyle().Foreground(Green)
@@ -105,7 +100,6 @@ var (
 func ThemedDelegate() list.DefaultDelegate {
 	d := list.NewDefaultDelegate()
 
-	// Selected item: sapphire foreground with bold
 	d.Styles.SelectedTitle = d.Styles.SelectedTitle.
 		Foreground(Cyan).
 		BorderForeground(Cyan)
@@ -113,7 +107,6 @@ func ThemedDelegate() list.DefaultDelegate {
 		Foreground(Blue).
 		BorderForeground(Cyan)
 
-	// Normal items: text color
 	d.Styles.NormalTitle = d.Styles.NormalTitle.
 		Foreground(lipgloss.Color("#cdd6f4")) // Catppuccin text
 	d.Styles.NormalDesc = d.Styles.NormalDesc.

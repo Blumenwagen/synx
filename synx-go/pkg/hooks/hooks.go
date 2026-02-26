@@ -31,7 +31,6 @@ func RunHook(hooksDir, hookName string) error {
 		return fmt.Errorf("hook stat error: %w", err)
 	}
 
-	// Check executable bit
 	if info.Mode()&0111 == 0 {
 		ui.Warn(fmt.Sprintf("Hook '%s' exists but is not executable (chmod +x it)", hookName))
 		return nil

@@ -45,7 +45,6 @@ type bootstrapModel struct {
 	input    textinput.Model
 	viewport viewport.Model
 
-	// Results
 	aurHelper       string
 	packages        string
 	repos           string
@@ -90,7 +89,6 @@ func (m bootstrapModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "esc":
-			// Go back a step
 			if m.step > bsStepAUR {
 				m.step--
 				m.cursor = 0
@@ -128,7 +126,6 @@ func (m bootstrapModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Update text input for text steps
 	if m.isTextStep() {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
@@ -231,11 +228,9 @@ func (m bootstrapModel) View() string {
 
 	var b strings.Builder
 
-	// Header
 	header := BoxStyle.Render(fmt.Sprintf("🔧 %s - Bootstrap Setup", StyleBold.Render("SYNX")))
 	b.WriteString(header + "\n\n")
 
-	// Progress indicator
 	steps := []string{"AUR", "Packages", "Repos", "Display", "Theme", "Restore", "Commands", "Review"}
 	var progress strings.Builder
 	for i, s := range steps {
@@ -252,7 +247,6 @@ func (m bootstrapModel) View() string {
 	}
 	b.WriteString(progress.String() + "\n\n")
 
-	// Current step content
 	switch m.step {
 	case bsStepAUR:
 		b.WriteString(TUITitleStyle.Render("1. Select AUR Helper") + "\n\n")
@@ -311,7 +305,6 @@ func (m bootstrapModel) View() string {
 		b.WriteString("\n" + TUIActiveStyle.Render("  Press [Enter] to save  •  [Esc] to go back") + "\n")
 	}
 
-	// Footer
 	b.WriteString("\n" + TUIMutedStyle.Render("  [Enter] next  •  [Esc] back  •  [Ctrl+C] cancel"))
 
 	return b.String()

@@ -69,12 +69,10 @@ func (m rollbackModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Update list
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	cmds = append(cmds, cmd)
 
-	// Update viewport content based on current list selection
 	if i, ok := m.list.SelectedItem().(commitItem); ok {
 		hash := i.commit.Hash
 		stat, cached := m.detailCache[hash]
@@ -112,7 +110,6 @@ func (m rollbackModel) View() string {
 // RunRollbackTUI launches the interactive commit selector.
 // Returns the number of commits to rollback (steps), or 0 if canceled.
 func RunRollbackTUI(gitMgr *git.GitManager) (int, error) {
-	// Fetch last 50 commits
 	commits, err := gitMgr.LogStructured(50)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch commits: %w", err)

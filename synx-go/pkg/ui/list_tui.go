@@ -92,7 +92,6 @@ func (m listModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.list, cmd = m.list.Update(msg)
 	cmds = append(cmds, cmd)
 
-	// Update Details pane
 	if i, ok := m.list.SelectedItem().(dotfileItem); ok {
 		var b strings.Builder
 
@@ -145,17 +144,14 @@ func RunListTUI(cfg *config.ConfigManager) (string, error) {
 	home, _ := os.UserHomeDir()
 	baseConfigDir := filepath.Join(home, ".config")
 
-	// 1. Find all active targets (Base + Machine)
 	targetMap := make(map[string]bool)
 	machineOnlyMap := make(map[string]bool)
 
-	// In ConfigManager, `Targets` is already the unified list if UsingMachineTargets is true
 	for _, t := range cfg.Targets {
 		targetMap[t] = true
 	}
 
 	if cfg.UsingMachineTargets {
-		// Figure out which ones are ONLY machine specific (not in base config file)
 		baseTargetsRaw, _ := os.ReadFile(filepath.Join(home, ".synx", "targets.conf"))
 		baseLines := strings.Split(string(baseTargetsRaw), "\n")
 		baseMap := make(map[string]bool)
@@ -173,14 +169,11 @@ func RunListTUI(cfg *config.ConfigManager) (string, error) {
 		}
 	}
 
-	// 2. Read ~/.config
 	entries, _ := os.ReadDir(baseConfigDir)
 
-	// Ensure we show tracked items even if they are currently missing from ~/.config
 	seenDirs := make(map[string]bool)
 	var items []list.Item
 
-	// First add the tracked ones
 	for _, t := range cfg.Targets {
 		seenDirs[t] = true
 		info, err := os.Lstat(filepath.Join(baseConfigDir, t))
@@ -193,7 +186,6 @@ func RunListTUI(cfg *config.ConfigManager) (string, error) {
 		})
 	}
 
-	// Then add the untracked ones currently present
 	for _, e := range entries {
 		name := e.Name()
 		if !seenDirs[name] && e.IsDir() && !strings.HasPrefix(name, ".") {

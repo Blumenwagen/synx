@@ -89,7 +89,6 @@ func (g *GitManager) Push(branch string, force bool) error {
 	}
 	cmd := exec.Command("git", args...)
 	cmd.Dir = g.RepoDir
-	// Attach to stdout/err so interactive auth prompts work natively
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -99,7 +98,6 @@ func (g *GitManager) Push(branch string, force bool) error {
 func (g *GitManager) Pull() error {
 	cmd := exec.Command("git", "pull", "--rebase")
 	cmd.Dir = g.RepoDir
-	// Attach to stdout/err so interactive auth prompts work natively
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -127,7 +125,6 @@ func (g *GitManager) IsUpToDate(branch string) (bool, error) {
 	remoteCmd.Dir = g.RepoDir
 	remoteHash, err := remoteCmd.Output()
 	if err != nil {
-		// No upstream or other error, assume potentially not up to date
 		return false, nil
 	}
 
@@ -166,7 +163,6 @@ func (g *GitManager) Log(count int) ([]string, error) {
 }
 
 func (g *GitManager) ResetHard(commits int) (string, error) {
-	// Setup target commit info
 	logArg := fmt.Sprintf("-%d", commits+1)
 	cmdLog := exec.Command("git", "log", "--oneline", logArg)
 	cmdLog.Dir = g.RepoDir

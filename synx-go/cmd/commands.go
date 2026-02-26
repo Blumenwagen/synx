@@ -22,7 +22,6 @@ import (
 )
 
 func init() {
-	// Sync logic mapping (rootCmd Run)
 	rootCmd.Run = func(cmd *cobra.Command, args []string) {
 		if versionFlag {
 			fmt.Println("synx version " + Version)
@@ -126,7 +125,6 @@ func init() {
 			return
 		}
 
-		// Default sync action
 		runSync(cfg)
 	}
 }
@@ -148,7 +146,6 @@ func runSync(cfg *config.ConfigManager) {
 		fmt.Println()
 	}
 
-	// Run pre-sync hook
 	hooksDir := filepath.Join(cfg.ConfigDir, "hooks")
 	if err := hooks.RunHook(hooksDir, hooks.PreSync); err != nil {
 		ui.Error(err.Error())
@@ -185,7 +182,6 @@ func runSync(cfg *config.ConfigManager) {
 		return
 	}
 
-	// Git
 	g := git.NewGitManager(eng.DotfileDir)
 	if !g.IsRepo() {
 		ui.Error("Not a git repository.")
@@ -219,7 +215,6 @@ func runSync(cfg *config.ConfigManager) {
 		os.Exit(1)
 	}
 
-	// Run post-sync hook
 	hooks.RunHook(hooksDir, hooks.PostSync)
 
 	fmt.Println()
@@ -236,7 +231,6 @@ func runRestore(cfg *config.ConfigManager) {
 	}
 	ui.PrintHeader("⬇", title)
 
-	// Run pre-restore hook
 	hooksDir := filepath.Join(cfg.ConfigDir, "hooks")
 	if err := hooks.RunHook(hooksDir, hooks.PreRestore); err != nil {
 		ui.Error(err.Error())
@@ -289,7 +283,6 @@ func runRestore(cfg *config.ConfigManager) {
 	ui.Step("Restoring dotfiles to ~/.config...")
 
 	if !dryRunFlag {
-		// Restore internal config backups immediately
 		synxBackup := eng.DotfileDir + "/.synx/synx.conf"
 		if _, err := os.Stat(synxBackup); err == nil {
 			os.MkdirAll(cfg.ConfigDir, 0755)
@@ -298,7 +291,6 @@ func runRestore(cfg *config.ConfigManager) {
 			cfg.Load()
 		}
 
-		// Restore package and service lists
 		synxDataDir := eng.DotfileDir + "/.synx"
 		for _, name := range []string{"packages.native", "packages.foreign", "services.system", "services.user"} {
 			src := filepath.Join(synxDataDir, name)
@@ -339,21 +331,18 @@ func runRestore(cfg *config.ConfigManager) {
 		}
 	}
 
-	// Run post-restore hook
 	hooks.RunHook(hooksDir, hooks.PostRestore)
 
 	ui.Success("Restore complete!")
 }
 
 func runList(cfg *config.ConfigManager) {
-	// Launch the interactive dashboard
 	targetToAdd, err := ui.RunListTUI(cfg)
 	if err != nil {
 		ui.Error("List UI error: " + err.Error())
 		os.Exit(1)
 	}
 
-	// If the user selected an untracked dotfile and pressed enter, pipe it to runAdd
 	if targetToAdd != "" {
 		fmt.Println()
 		runAdd(cfg, targetToAdd)
@@ -395,7 +384,6 @@ func runRollback(cfg *config.ConfigManager, steps int) {
 		os.Exit(1)
 	}
 
-	// If no steps provided, launch the interactive TUI
 	if steps <= 0 {
 		var err error
 		steps, err = ui.RunRollbackTUI(g)
@@ -404,7 +392,6 @@ func runRollback(cfg *config.ConfigManager, steps int) {
 			os.Exit(1)
 		}
 
-		// If 0 returned, the user canceled
 		if steps == 0 {
 			fmt.Println("Rollback canceled.")
 			return
@@ -447,7 +434,6 @@ func runRollback(cfg *config.ConfigManager, steps int) {
 		ui.Success("Remote history updated")
 	}
 
-	// Automatically run restore
 	runRestore(cfg)
 }
 
@@ -460,14 +446,12 @@ func runAdd(cfg *config.ConfigManager, target string) {
 	}
 
 	if machineFlag {
-		// Explicitly targeting machine config
 		cfg.Targets = append(cfg.Targets, target)
 		cfg.SaveTargetsMachine(cfg.Targets)
 		ui.Success("Added '" + target + "' to tracked dotfiles (" + cfg.Hostname + ")")
 		return
 	}
 
-	// Add to base config
 	baseTargets, _ := readBaseTargets(cfg)
 	alreadyInBase := false
 	for _, bt := range baseTargets {
@@ -482,7 +466,6 @@ func runAdd(cfg *config.ConfigManager, target string) {
 		ui.Success("Added '" + target + "' to base tracked dotfiles")
 	}
 
-	// If using machine-specific targets, prompt to also add there
 	if cfg.UsingMachineTargets {
 		ui.Warn("You're using machine-specific targets on this machine (" + cfg.Hostname + ")")
 		ui.Info("Adding to base config alone won't affect this machine.")
@@ -494,7 +477,6 @@ func runAdd(cfg *config.ConfigManager, target string) {
 
 		if choice == "y" || choice == "yes" {
 			machineTargets, _ := cfg.MachineTargets()
-			// Check if already in machine config
 			for _, mt := range machineTargets {
 				if mt == target {
 					ui.Info("'" + target + "' is already in machine config")
@@ -537,7 +519,6 @@ func runRemove(cfg *config.ConfigManager, target string) {
 func runClean(cfg *config.ConfigManager) {
 	ui.PrintHeader("🧹", "Clean Repository")
 
-	// Get ALL tracked targets across all synx.conf files
 	globalTargets, err := cfg.GetGlobalTargets()
 	if err != nil {
 		ui.Error("Failed to read global targets: " + err.Error())
@@ -552,7 +533,6 @@ func runClean(cfg *config.ConfigManager) {
 		os.Exit(1)
 	}
 
-	// Create a fast lookup map for safe files/directories
 	safeSet := map[string]bool{
 		".git":       true,
 		".synx":      true,
@@ -615,7 +595,6 @@ func runClean(cfg *config.ConfigManager) {
 			} else {
 				ui.Success("Cleaned and committed successfully")
 
-				// Prompt for push
 				fmt.Printf("  %s Push changes to remote? [Y/n]: ", ui.StyleCyan.Render("▸"))
 				var pushChoice string
 				fmt.Scanln(&pushChoice)
@@ -698,7 +677,7 @@ func runBsSetup(cfg *config.ConfigManager) {
 func runBootstrap(cfg *config.ConfigManager, url string, yes bool) {
 	eng, _ := sync.NewEngine(cfg)
 
-	if url != "" && url != "true" { // cobra flag artifact parsing
+	if url != "" && url != "true" {
 		ui.Step("Cloning dotfiles repository...")
 		ui.Detail(url)
 
@@ -837,9 +816,7 @@ func readBaseTargets(cfg *config.ConfigManager) ([]string, error) {
 	return lines, nil
 }
 
-// ──────────────────────────────────────────────
 // Status
-// ──────────────────────────────────────────────
 
 func runStatus(cfg *config.ConfigManager) {
 	title := "Dotfile Status"
@@ -866,7 +843,6 @@ func runStatus(cfg *config.ConfigManager) {
 		srcPath := filepath.Join(eng.ConfigDir, target)
 		destPath := filepath.Join(eng.DotfileDir, target)
 
-		// Resolve symlinks
 		if resolved, err := filepath.EvalSymlinks(srcPath); err == nil {
 			srcPath = resolved
 		}
@@ -880,20 +856,17 @@ func runStatus(cfg *config.ConfigManager) {
 		}
 
 		if srcErr != nil {
-			// Exists in repo but deleted locally
 			fmt.Printf("  %s %s\n", ui.StyleRed.Render("✗"), target+" "+ui.StyleDim.Render("(deleted locally)"))
 			deleted++
 			continue
 		}
 
 		if dstErr != nil {
-			// Exists locally but not in repo
 			fmt.Printf("  %s %s\n", ui.StyleGreen.Render("+"), target+" "+ui.StyleDim.Render("(new, not yet synced)"))
 			added++
 			continue
 		}
 
-		// Both exist — diff them
 		if srcInfo.IsDir() {
 			cmd := exec.Command("diff", "-rq", srcPath, destPath)
 			var out bytes.Buffer
@@ -908,7 +881,6 @@ func runStatus(cfg *config.ConfigManager) {
 				lines := strings.Split(diffOutput, "\n")
 				changeCount := len(lines)
 				fmt.Printf("  %s %s\n", ui.StyleYellow.Render("✎"), target+" "+ui.StyleDim.Render(fmt.Sprintf("(%d file(s) changed)", changeCount)))
-				// Show up to 5 changed files
 				max := 5
 				if changeCount < max {
 					max = changeCount
@@ -948,9 +920,7 @@ func runStatus(cfg *config.ConfigManager) {
 	fmt.Println()
 }
 
-// ──────────────────────────────────────────────
 // Doctor
-// ──────────────────────────────────────────────
 
 func runDoctor(cfg *config.ConfigManager) {
 	ui.PrintHeader("🩺", "Doctor")
@@ -964,7 +934,6 @@ func runDoctor(cfg *config.ConfigManager) {
 	eng, _ := sync.NewEngine(cfg)
 	g := git.NewGitManager(eng.DotfileDir)
 
-	// 1. Git repo check
 	if g.IsRepo() {
 		ui.Success("Git repository OK")
 		passed++
@@ -973,7 +942,6 @@ func runDoctor(cfg *config.ConfigManager) {
 		errors++
 	}
 
-	// 2. Remote check
 	if g.IsRepo() {
 		remoteURL, err := g.RemoteURL()
 		if err == nil && remoteURL != "" {
@@ -985,7 +953,6 @@ func runDoctor(cfg *config.ConfigManager) {
 		}
 	}
 
-	// 3. Unpushed commits
 	if g.IsRepo() {
 		branch, _ := g.CurrentBranch()
 		if branch != "" {
@@ -1000,11 +967,9 @@ func runDoctor(cfg *config.ConfigManager) {
 		}
 	}
 
-	// 4. Targets check
 	ui.Success(fmt.Sprintf("%d targets tracked", len(cfg.Targets)))
 	passed++
 
-	// 5. Missing targets
 	home, _ := os.UserHomeDir()
 	baseConfigDir := home + "/.config"
 	for _, t := range cfg.Targets {
@@ -1015,7 +980,6 @@ func runDoctor(cfg *config.ConfigManager) {
 		}
 	}
 
-	// 6. Broken symlinks
 	brokenSymlinks := 0
 	for _, t := range cfg.Targets {
 		path := filepath.Join(baseConfigDir, t)
@@ -1037,7 +1001,6 @@ func runDoctor(cfg *config.ConfigManager) {
 		errors += brokenSymlinks
 	}
 
-	// 7. Untracked popular configs
 	popularConfigs := []string{"waybar", "rofi", "nvim", "fish", "zsh", "tmux", "starship", "wezterm", "sway", "i3", "polybar", "dunst", "picom", "neofetch", "wofi"}
 	targetSet := make(map[string]bool)
 	for _, t := range cfg.Targets {
@@ -1059,7 +1022,6 @@ func runDoctor(cfg *config.ConfigManager) {
 		warnings++
 	}
 
-	// 8. Orphaned excludes
 	if g.IsRepo() {
 		repoFiles, _ := g.LsFiles()
 		for _, exc := range cfg.Excludes {
@@ -1070,7 +1032,6 @@ func runDoctor(cfg *config.ConfigManager) {
 					break
 				}
 			}
-			// Also check live files
 			if !matches {
 				for _, t := range cfg.Targets {
 					if strings.HasPrefix(exc, t+"/") || exc == t {
@@ -1086,7 +1047,6 @@ func runDoctor(cfg *config.ConfigManager) {
 		}
 	}
 
-	// 9. Machine config
 	if cfg.Hostname != "" {
 		msg := "Machine: " + cfg.Hostname
 		if cfg.UsingMachineTargets {
@@ -1104,7 +1064,6 @@ func runDoctor(cfg *config.ConfigManager) {
 		warnings++
 	}
 
-	// 10. Config permissions
 	for _, path := range []string{cfg.SynxConfig, cfg.ExcludeCfg} {
 		if _, err := os.Stat(path); err == nil {
 			f, err := os.OpenFile(path, os.O_RDWR, 0)
@@ -1117,7 +1076,6 @@ func runDoctor(cfg *config.ConfigManager) {
 		}
 	}
 
-	// 11. Hooks directory
 	hooksDir := filepath.Join(cfg.ConfigDir, "hooks")
 	if _, err := os.Stat(hooksDir); err == nil {
 		entries, _ := os.ReadDir(hooksDir)
@@ -1125,7 +1083,6 @@ func runDoctor(cfg *config.ConfigManager) {
 		passed++
 	}
 
-	// 12. Profiles directory
 	profilesDir := filepath.Join(cfg.ConfigDir, "profiles")
 	pNames, _ := profiles.ListProfiles(profilesDir)
 	if len(pNames) > 0 {
@@ -1138,7 +1095,6 @@ func runDoctor(cfg *config.ConfigManager) {
 		passed++
 	}
 
-	// 13. Package state
 	nativePath := packages.NativeListPath(cfg.ConfigDir)
 	foreignPath := packages.ForeignListPath(cfg.ConfigDir)
 	nativeList, _ := packages.LoadList(nativePath)
@@ -1151,7 +1107,6 @@ func runDoctor(cfg *config.ConfigManager) {
 		warnings++
 	}
 
-	// 14. Service state
 	systemPath := services.SystemListPath(cfg.ConfigDir)
 	userPath := services.UserListPath(cfg.ConfigDir)
 	systemList, _ := services.LoadList(systemPath)
@@ -1177,9 +1132,7 @@ func runDoctor(cfg *config.ConfigManager) {
 	fmt.Println()
 }
 
-// ──────────────────────────────────────────────
 // Profiles
-// ──────────────────────────────────────────────
 
 func runProfileApply(cfg *config.ConfigManager, name string) {
 	ui.PrintHeader("🎨", "Apply Profile")
@@ -1202,7 +1155,6 @@ func runProfileApply(cfg *config.ConfigManager, name string) {
 
 	ui.Success(fmt.Sprintf("Applied %d overlay file(s)", count))
 
-	// Show which files were overlaid
 	files, _ := profiles.ProfileFiles(profilesDir, name)
 	for _, f := range files {
 		if f != "targets.conf" && f != "excludes.conf" {
@@ -1210,7 +1162,6 @@ func runProfileApply(cfg *config.ConfigManager, name string) {
 		}
 	}
 
-	// Auto-reload Hyprland if hypr files were changed
 	for _, f := range files {
 		if strings.HasPrefix(f, "hypr/") {
 			if _, err := os.Stat("/usr/bin/hyprctl"); err == nil {
@@ -1293,7 +1244,6 @@ func runProfileDelete(cfg *config.ConfigManager, name string) {
 		os.Exit(1)
 	}
 
-	// Clear active marker if deleting active profile
 	active := profiles.GetActiveProfile(cfg.ConfigDir)
 	if active == name {
 		profiles.ClearActiveProfile(cfg.ConfigDir)
@@ -1303,9 +1253,7 @@ func runProfileDelete(cfg *config.ConfigManager, name string) {
 	fmt.Println()
 }
 
-// ──────────────────────────────────────────────
 // Remote Diff
-// ──────────────────────────────────────────────
 
 func runRemoteDiff(cfg *config.ConfigManager) {
 	ui.PrintHeader("🌐", "Remote Diff")
@@ -1327,17 +1275,14 @@ func runRemoteDiff(cfg *config.ConfigManager) {
 
 	branch, _ := g.CurrentBranch()
 
-	// First sync to repo (no commit) so we can diff accurately
 	ui.Step("Syncing local state for comparison...")
 	syncEng, _ := sync.NewEngine(cfg)
 	syncEng.SyncToRepo()
 
-	// Add but don't commit
 	addCmd := exec.Command("git", "add", ".")
 	addCmd.Dir = eng.DotfileDir
 	addCmd.Run()
 
-	// Now diff against remote
 	stat, err := g.DiffStatRemote(branch)
 	if err != nil {
 		ui.Error("Failed to diff against remote: " + err.Error())
@@ -1355,7 +1300,6 @@ func runRemoteDiff(cfg *config.ConfigManager) {
 	ui.Step("Differences:")
 	fmt.Println()
 
-	// Show colored diff
 	diffCmd := exec.Command("git", "diff", "--color=always", "origin/"+branch, "--", ".")
 	diffCmd.Dir = eng.DotfileDir
 	diffCmd.Stdout = os.Stdout
@@ -1366,13 +1310,11 @@ func runRemoteDiff(cfg *config.ConfigManager) {
 	fmt.Println(ui.StyleDim.Render("─────────────────────────────────────"))
 	lines := strings.Split(stat, "\n")
 	if len(lines) > 0 {
-		// Last line of stat is the summary
 		fmt.Printf("  %s\n", lines[len(lines)-1])
 	}
 	fmt.Println(ui.StyleDim.Render("─────────────────────────────────────"))
 	fmt.Println()
 
-	// Reset the staging
 	resetCmd := exec.Command("git", "reset", "HEAD", "--quiet")
 	resetCmd.Dir = eng.DotfileDir
 	resetCmd.Run()
@@ -1382,26 +1324,22 @@ func runUpdate() {
 	ui.PrintHeader("⬆", "Self-Update")
 	fmt.Println()
 
-	// 1. Find the currently running binary
 	exePath, err := os.Executable()
 	if err != nil {
 		ui.Error("Cannot determine binary location: " + err.Error())
 		os.Exit(1)
 	}
 
-	// Resolve symlinks to find the real binary
 	realPath, err := filepath.EvalSymlinks(exePath)
 	if err != nil {
 		ui.Error("Cannot resolve binary path: " + err.Error())
 		os.Exit(1)
 	}
 
-	// 2. Find the source repo — binary lives in synx-go/, repo root is parent of that
 	binaryDir := filepath.Dir(realPath)
 	sourceDir := binaryDir // Assume binary is in synx-go/
 	goMod := filepath.Join(sourceDir, "go.mod")
 	if _, err := os.Stat(goMod); err != nil {
-		// Try one level up (maybe binary is in repo root)
 		sourceDir = filepath.Dir(binaryDir)
 		goMod = filepath.Join(sourceDir, "synx-go", "go.mod")
 		if _, err := os.Stat(goMod); err == nil {
@@ -1414,7 +1352,6 @@ func runUpdate() {
 		}
 	}
 
-	// 3. Find the git repo root (could be parent of synx-go/)
 	repoDir := sourceDir
 	for repoDir != "/" {
 		if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
@@ -1438,7 +1375,6 @@ func runUpdate() {
 	}
 	ui.Success("Source updated")
 
-	// 4. Build new binary to temp file
 	fmt.Println()
 	ui.Step("Building new binary via build.sh...")
 
@@ -1451,14 +1387,12 @@ func runUpdate() {
 		os.Exit(1)
 	}
 
-	// 5. Replace old binary with new one (build.sh outputs to sourceDir/synx)
 	newBin := filepath.Join(sourceDir, "synx")
 	if _, err := os.Stat(newBin); err != nil {
 		ui.Error("Cannot find newly compiled binary at " + newBin)
 		os.Exit(1)
 	}
 
-	// If build.sh already compiled in-place (newBin == realPath), no rename needed
 	if newBin == realPath {
 		ui.Success("Binary updated in-place at " + realPath)
 	} else {
@@ -1467,18 +1401,15 @@ func runUpdate() {
 		os.Rename(realPath, tmpBin) // Move current out of the way
 
 		if err := os.Rename(newBin, realPath); err != nil {
-			// Rollback if replace fails
 			os.Rename(tmpBin, realPath)
 			ui.Error("Failed to replace binary: " + err.Error())
 			os.Exit(1)
 		}
-		// Delete the old binary on success
 		os.Remove(tmpBin)
 
 		ui.Success("Binary updated at " + realPath)
 	}
 
-	// 6. Show the version we updated to
 	fmt.Println()
 	verCmd := exec.Command("git", "log", "--oneline", "-1")
 	verCmd.Dir = repoDir

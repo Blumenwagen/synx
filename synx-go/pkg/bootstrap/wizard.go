@@ -23,7 +23,6 @@ func RunWizard() (*Config, error) {
 		DotfilesRestore: result.DotfilesRestore,
 	}
 
-	// Parse packages (space/newline separated)
 	if result.Packages != "" {
 		for _, p := range strings.Fields(result.Packages) {
 			if p = strings.TrimSpace(p); p != "" {
@@ -32,7 +31,6 @@ func RunWizard() (*Config, error) {
 		}
 	}
 
-	// Parse repos (pipe-separated per line)
 	if result.Repos != "" {
 		for _, line := range strings.Split(result.Repos, "\n") {
 			line = strings.TrimSpace(line)
@@ -56,7 +54,6 @@ func RunWizard() (*Config, error) {
 		}
 	}
 
-	// Parse commands (one per line)
 	if result.Commands != "" {
 		for _, c := range strings.Split(result.Commands, "\n") {
 			if c = strings.TrimSpace(c); c != "" {

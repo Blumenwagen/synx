@@ -150,13 +150,11 @@ func runPkgStatus(cfg *config.ConfigManager) {
 
 	fmt.Println()
 
-	// Native changes
 	if len(nativeAdded) > 0 || len(nativeRemoved) > 0 {
 		fmt.Println(ui.StyleBold.Render("NATIVE PACKAGES:"))
 		printDiffList(nativeAdded, nativeRemoved)
 	}
 
-	// Foreign changes
 	if len(foreignAdded) > 0 || len(foreignRemoved) > 0 {
 		fmt.Println(ui.StyleBold.Render("FOREIGN (AUR) PACKAGES:"))
 		printDiffList(foreignAdded, foreignRemoved)
@@ -209,7 +207,6 @@ func runPkgRestore(cfg *config.ConfigManager) {
 		return
 	}
 
-	// Install native
 	if len(nativeMissing) > 0 {
 		fmt.Println()
 		ui.Step(fmt.Sprintf("Installing %d missing native package(s)...", len(nativeMissing)))
@@ -223,7 +220,6 @@ func runPkgRestore(cfg *config.ConfigManager) {
 		}
 	}
 
-	// Install foreign
 	if len(foreignMissing) > 0 {
 		helper := packages.DetectAURHelper()
 		if helper == "" {

@@ -29,7 +29,6 @@ func NewConfigManager() (*ConfigManager, error) {
 
 	cfgDir := filepath.Join(home, ".config", "synx")
 
-	// Create config dir if not exists
 	if err := os.MkdirAll(cfgDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create config dir: %w", err)
 	}
@@ -49,7 +48,6 @@ func NewConfigManager() (*ConfigManager, error) {
 }
 
 func (c *ConfigManager) Load() error {
-	// Ensure base targets
 	if _, err := os.Stat(c.SynxConfig); os.IsNotExist(err) {
 		defaultTargets := []string{"hypr", "foot", "kitty", "fastfetch", "alacritty"}
 		err = c.SaveTargets(defaultTargets)
@@ -58,7 +56,6 @@ func (c *ConfigManager) Load() error {
 		}
 	}
 
-	// Ensure base excludes
 	if _, err := os.Stat(c.ExcludeCfg); os.IsNotExist(err) {
 		err = c.SaveExcludes([]string{})
 		if err != nil {
@@ -66,7 +63,6 @@ func (c *ConfigManager) Load() error {
 		}
 	}
 
-	// Load targets: machine-specific replaces base if it exists
 	if _, err := os.Stat(c.SynxConfigMachine); err == nil {
 		targets, err := readFileLines(c.SynxConfigMachine)
 		if err != nil {
@@ -82,7 +78,6 @@ func (c *ConfigManager) Load() error {
 		c.Targets = targets
 	}
 
-	// Load excludes: base + machine-specific (appended)
 	excludes, err := readFileLines(c.ExcludeCfg)
 	if err != nil {
 		return err
@@ -145,7 +140,6 @@ func (c *ConfigManager) GetGlobalTargets() ([]string, error) {
 
 	for _, e := range entries {
 		name := e.Name()
-		// Match synx.conf and synx.conf.<hostname>
 		if strings.HasPrefix(name, "synx.conf") && !e.IsDir() {
 			path := filepath.Join(c.ConfigDir, name)
 			lines, err := readFileLines(path)
@@ -170,7 +164,6 @@ func (c *ConfigManager) IsExcluded(path string) bool {
 		return false
 	}
 
-	// Basic matching logic analogous to fish string match -q
 	for _, pattern := range c.Excludes {
 		if path == pattern {
 			return true
@@ -178,11 +171,9 @@ func (c *ConfigManager) IsExcluded(path string) bool {
 		if match, _ := filepath.Match(pattern, path); match {
 			return true
 		}
-		// Prefix matching (pattern/*)
 		if strings.HasPrefix(path, pattern+"/") {
 			return true
 		}
-		// Suffix matching (*/pattern) if pattern has no slashes
 		if !strings.Contains(pattern, "/") && strings.HasSuffix(path, "/"+pattern) {
 			return true
 		}

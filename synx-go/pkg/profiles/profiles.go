@@ -86,17 +86,14 @@ func ApplyProfile(profilesDir, name, baseConfigDir string) (int, error) {
 			return nil
 		}
 
-		// Skip profile metadata files
 		base := d.Name()
 		if base == "targets.conf" || base == "excludes.conf" {
 			return nil
 		}
 
-		// Calculate relative path within the profile
 		relPath, _ := filepath.Rel(profileDir, path)
 		destPath := filepath.Join(baseConfigDir, relPath)
 
-		// Ensure destination directory exists
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 			return err
 		}

@@ -18,11 +18,9 @@ var rootCmd = &cobra.Command{
 			return
 		}
 
-		// By default run sync
 		ui.PrintHeader("🚀", "Dotfile Sync")
 		fmt.Println()
 		ui.Step("Syncing dotfiles...")
-		// TODO: Call sync engine
 	},
 }
 
@@ -79,7 +77,6 @@ func init() {
 	rootCmd.Flags().BoolVar(&updateFlag, "update", false, "Update synx to the latest version")
 	rootCmd.Flags().BoolVarP(&versionFlag, "version", "v", false, "Print the synx version")
 
-	// Override the default help
 	rootCmd.SetHelpFunc(customHelp)
 }
 
@@ -95,14 +92,12 @@ func customHelp(cmd *cobra.Command, args []string) {
 	fmt.Println(d("multi-machine support, profiles, and full system bootstrapping."))
 	fmt.Println()
 
-	// Sync & Restore
 	fmt.Println(h("SYNC & RESTORE"))
 	fmt.Printf("  %s                         Sync dotfiles to remote\n", g("synx"))
 	fmt.Printf("  %s %s                  Restore from remote\n", g("synx"), c("-r, --restore"))
 	fmt.Printf("  %s %s                  Preview without changes\n", g("synx"), c("-n, --dry-run"))
 	fmt.Println()
 
-	// Status & Diagnostics
 	fmt.Println(h("STATUS & DIAGNOSTICS"))
 	fmt.Printf("  %s %s                   Show changes since last sync\n", g("synx"), c("-s, --status"))
 	fmt.Printf("  %s %s               Compare local vs remote\n", g("synx"), c("--remote-diff"))
@@ -110,7 +105,6 @@ func customHelp(cmd *cobra.Command, args []string) {
 	fmt.Printf("  %s %s                   Show sync history\n", g("synx"), c("--history"))
 	fmt.Println()
 
-	// Target Management
 	fmt.Println(h("TARGET MANAGEMENT"))
 	fmt.Printf("  %s %s               Track a new dotfile directory\n", g("synx"), c("--add <name>"))
 	fmt.Printf("  %s %s            Stop tracking a dotfile\n", g("synx"), c("--remove <name>"))
@@ -120,7 +114,6 @@ func customHelp(cmd *cobra.Command, args []string) {
 	fmt.Printf("  %s %s              Rollback n commits\n", g("synx"), c("--rollback <n>"))
 	fmt.Println()
 
-	// Profiles
 	fmt.Println(h("PROFILES"))
 	fmt.Printf("  %s %s         Apply a named profile\n", g("synx"), c("--profile <name>"))
 	fmt.Printf("  %s %s              List available profiles\n", g("synx"), c("--profile-list"))
@@ -128,13 +121,11 @@ func customHelp(cmd *cobra.Command, args []string) {
 	fmt.Printf("  %s %s  Delete a profile\n", g("synx"), c("--profile-delete <name>"))
 	fmt.Println()
 
-	// Bootstrap
 	fmt.Println(h("BOOTSTRAP"))
 	fmt.Printf("  %s %s          Create bootstrap config\n", g("synx"), c("--bootstrap-setup"))
 	fmt.Printf("  %s %s       Clone & bootstrap from URL\n", g("synx"), c("--bootstrap <url>"))
 	fmt.Println()
 
-	// Modifiers
 	fmt.Println(h("MODIFIERS"))
 	fmt.Printf("  %s              Target machine-specific config\n", c("-m, --machine"))
 	fmt.Printf("  %s                   Skip confirmations (bootstrap)\n", c("--yes"))
@@ -142,7 +133,6 @@ func customHelp(cmd *cobra.Command, args []string) {
 	fmt.Printf("  %s               Print the current synx version\n", c("-v, --version"))
 	fmt.Println()
 
-	// Packages & Services
 	fmt.Println(h("PACKAGES & SERVICES"))
 	fmt.Printf("  %s %s              Snapshot installed packages\n", g("synx pkg"), c("sync"))
 	fmt.Printf("  %s %s            Package changes since last sync\n", g("synx pkg"), c("status"))

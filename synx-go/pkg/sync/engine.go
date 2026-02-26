@@ -49,7 +49,6 @@ func (e *Engine) SyncToRepo() (*SyncResult, error) {
 		srcPath := filepath.Join(e.ConfigDir, target)
 		destPath := filepath.Join(e.DotfileDir, target)
 
-		// Resolve symlinks so WalkDir paths match the prefix we trim
 		resolvedSrc, err := filepath.EvalSymlinks(srcPath)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -110,7 +109,6 @@ func (e *Engine) SyncToRepo() (*SyncResult, error) {
 	}
 
 	if !e.DryRun {
-		// Backup internal configs
 		synxDataDir := filepath.Join(e.DotfileDir, ".synx")
 		os.MkdirAll(synxDataDir, 0755)
 
@@ -132,7 +130,6 @@ func (e *Engine) SyncToRepo() (*SyncResult, error) {
 			e.copyFile(excSrc, excDst)
 		}
 
-		// Backup machine-specific configs
 		if e.Config.Hostname != "" {
 			machSynxSrc := e.Config.SynxConfigMachine
 			machSynxDst := filepath.Join(synxDataDir, "synx.conf."+e.Config.Hostname)
@@ -147,7 +144,6 @@ func (e *Engine) SyncToRepo() (*SyncResult, error) {
 			}
 		}
 
-		// Backup package and service lists
 		for _, name := range []string{"packages.native", "packages.foreign", "services.system", "services.user"} {
 			src := filepath.Join(e.Config.ConfigDir, name)
 			if _, err := os.Stat(src); err == nil {
@@ -180,13 +176,10 @@ func (e *Engine) RestoreFromRepo() (*RestoreResult, error) {
 			continue
 		}
 
-		// Check if destination exists
 		destInfo, destErr := os.Lstat(destPath)
 
 		if destErr == nil {
-			// Exists
 			if destInfo.Mode()&os.ModeSymlink != 0 {
-				// Follow symlink
 				realPath, err := filepath.EvalSymlinks(destPath)
 				if err != nil {
 					ui.Error(fmt.Sprintf("failed to eval symlink %s: %v", target, err))
@@ -203,7 +196,6 @@ func (e *Engine) RestoreFromRepo() (*RestoreResult, error) {
 					res.Restored++
 				}
 			} else if destInfo.IsDir() && info.IsDir() {
-				// Exists as directory
 				os.MkdirAll(destPath, 0755)
 				err = e.restoreDirInPlace(srcPath, destPath, target)
 				if err != nil {
@@ -214,8 +206,6 @@ func (e *Engine) RestoreFromRepo() (*RestoreResult, error) {
 					res.Restored++
 				}
 			} else {
-				// Either file replacing file, or swapping types. Just copy it over.
-				// (Assuming simple overwrite for files)
 				if e.Config.IsExcluded(target) {
 					ui.Warn(fmt.Sprintf("%s %s", target, ui.StyleDim.Render("(excluded)")))
 					continue
@@ -231,7 +221,6 @@ func (e *Engine) RestoreFromRepo() (*RestoreResult, error) {
 				}
 			}
 		} else {
-			// Doesn't exist, just copy the whole thing
 			if info.IsDir() {
 				err = e.copyDirSimple(srcPath, destPath) // We don't need to filter on restore if it doesn't exist
 				if err != nil {
@@ -242,7 +231,6 @@ func (e *Engine) RestoreFromRepo() (*RestoreResult, error) {
 					res.Restored++
 				}
 			} else {
-				// Single file
 				if e.Config.IsExcluded(target) {
 					ui.Warn(fmt.Sprintf("%s %s", target, ui.StyleDim.Render("(excluded)")))
 					continue
@@ -268,7 +256,6 @@ func (e *Engine) RestoreFromRepo() (*RestoreResult, error) {
 func (e *Engine) copyDirWithExcludes(src, dst, targetName string) error {
 	excludedCount := 0
 
-	// Resolve the config dir for correct relative path computation
 	resolvedConfigDir, err := filepath.EvalSymlinks(e.ConfigDir)
 	if err != nil {
 		resolvedConfigDir = e.ConfigDir
@@ -299,7 +286,6 @@ func (e *Engine) copyDirWithExcludes(src, dst, targetName string) error {
 		}
 
 		if d.Type()&fs.ModeSymlink != 0 {
-			// Attempt to copy symlink
 			linkDst, err := os.Readlink(path)
 			if err == nil {
 				os.Remove(dstPath)
@@ -358,7 +344,6 @@ func (e *Engine) restoreDirInPlace(src, dst, targetName string) error {
 			return nil
 		}
 
-		// If the destination is a symlink, follow it instead of replacing it
 		dstPath = resolveDestSymlink(dstPath)
 
 		os.MkdirAll(filepath.Dir(dstPath), 0755)
@@ -370,7 +355,6 @@ func (e *Engine) restoreDirInPlace(src, dst, targetName string) error {
 	}
 
 	if excludedCount > 0 {
-		// Log handled in main loop
 	}
 
 	return nil
@@ -382,7 +366,6 @@ func (e *Engine) copyDirSimple(src, dst string) error {
 }
 
 func (e *Engine) copyFile(src, dst string) error {
-	// Resolve destination symlinks: write through them, don't replace them
 	dst = resolveDestSymlink(dst)
 
 	in, err := os.Open(src)
@@ -402,7 +385,6 @@ func (e *Engine) copyFile(src, dst string) error {
 		return err
 	}
 
-	// Try to sync permissions
 	info, err := os.Stat(src)
 	if err == nil {
 		os.Chmod(dst, info.Mode())
