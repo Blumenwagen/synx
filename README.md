@@ -1,6 +1,6 @@
 # SYNX — Dotfile Backup System
 
-A fast CLI tool for managing dotfiles with git-based version control, multi-machine support, profiles, and full system bootstrapping. Written in Go.
+A fast CLI tool for managing dotfiles with git-based version control, multi-machine support, profiles, and full system bootstrapping.
 
 ## Quick Start
 
@@ -12,11 +12,11 @@ cd synx
 
 Requires **Go** and **git**. The installer builds the binary and symlinks it to `~/.local/bin/synx`.
 
-## Usage
+## Basic Usage
 
 ```bash
-synx                       # Sync dotfiles to GitHub
-synx -r                    # Restore from GitHub
+synx                       # Sync dotfiles to remote Git Repo
+synx -r                    # Restore from remote Git Repo
 synx -s                    # Show what changed
 synx -n                    # Dry-run (preview only)
 synx --doctor              # Health checks
@@ -37,6 +37,11 @@ synx --help                # Full command list
 - **Bootstrap** — provision a new machine from a declarative config
 - **Doctor** — health checks and diagnostics
 
+> [!WARNING]
+> The bootstrap feature is designed for **Arch Linux** and Arch-based distributions.
+> Core syncing should work on any Unix-like system.
+
+
 ## 📖 Documentation
 
 **Full documentation is available on the [Wiki](https://github.com/Blumenwagen/synx/wiki):**
@@ -50,6 +55,4 @@ synx --help                # Full command list
 | [Bootstrap](https://github.com/Blumenwagen/synx/wiki/Bootstrap) | New machine provisioning |
 | [Doctor](https://github.com/Blumenwagen/synx/wiki/Doctor) | Health checks & diagnostics |
 
-> [!WARNING]
-> The bootstrap feature is designed for **Arch Linux** and Arch-based distributions.
-> Core syncing works on any Unix-like system.
+
