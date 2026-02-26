@@ -186,7 +186,11 @@ func (e *Engine) RestoreFromRepo() (*RestoreResult, error) {
 					res.Failed++
 					continue
 				}
-				os.MkdirAll(realPath, 0755)
+				if info.IsDir() {
+					os.MkdirAll(realPath, 0755)
+				} else {
+					os.MkdirAll(filepath.Dir(realPath), 0755)
+				}
 				err = e.restoreDirInPlace(srcPath, realPath, target)
 				if err != nil {
 					ui.Error(fmt.Sprintf("%s %s", target, ui.StyleDim.Render(fmt.Sprintf("(restore failed: %v)", err))))
@@ -256,10 +260,15 @@ func (e *Engine) RestoreFromRepo() (*RestoreResult, error) {
 func (e *Engine) copyDirWithExcludes(src, dst, targetName string) error {
 	excludedCount := 0
 
+	dst = resolveDestSymlink(dst)
+
 	resolvedConfigDir, err := filepath.EvalSymlinks(e.ConfigDir)
 	if err != nil {
 		resolvedConfigDir = e.ConfigDir
 	}
+
+	tmpDst := dst + ".tmp"
+	os.RemoveAll(tmpDst)
 
 	err = filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -279,7 +288,7 @@ func (e *Engine) copyDirWithExcludes(src, dst, targetName string) error {
 			return nil
 		}
 
-		dstPath := filepath.Join(dst, strings.TrimPrefix(path, src))
+		dstPath := filepath.Join(tmpDst, strings.TrimPrefix(path, src))
 
 		if d.IsDir() {
 			return os.MkdirAll(dstPath, 0755)
@@ -298,8 +307,25 @@ func (e *Engine) copyDirWithExcludes(src, dst, targetName string) error {
 	})
 
 	if err != nil {
+		os.RemoveAll(tmpDst)
 		return err
 	}
+
+	// Atomic swap
+	backupDst := dst + ".backup"
+	os.RemoveAll(backupDst)
+
+	if _, statErr := os.Stat(dst); statErr == nil {
+		os.Rename(dst, backupDst)
+	}
+
+	if err := os.Rename(tmpDst, dst); err != nil {
+		os.Rename(backupDst, dst) // attempt restore
+		os.RemoveAll(tmpDst)
+		return fmt.Errorf("failed atomic directory rename: %w", err)
+	}
+
+	os.RemoveAll(backupDst)
 
 	if excludedCount > 0 {
 		ui.Success(fmt.Sprintf("%s %s", targetName, ui.StyleDim.Render(fmt.Sprintf("(%d excluded)", excludedCount))))
@@ -361,8 +387,32 @@ func (e *Engine) restoreDirInPlace(src, dst, targetName string) error {
 }
 
 func (e *Engine) copyDirSimple(src, dst string) error {
-	cmd := exec.Command("cp", "-r", src, dst) // Use OS cp for quick recursive copy, preserve symlinks
-	return cmd.Run()
+	dst = resolveDestSymlink(dst)
+
+	tmpDst := dst + ".tmp"
+	os.RemoveAll(tmpDst)
+
+	cmd := exec.Command("cp", "-r", src, tmpDst) // Use OS cp for quick recursive copy, preserve symlinks
+	if err := cmd.Run(); err != nil {
+		os.RemoveAll(tmpDst)
+		return err
+	}
+
+	backupDst := dst + ".backup"
+	os.RemoveAll(backupDst)
+
+	if _, statErr := os.Stat(dst); statErr == nil {
+		os.Rename(dst, backupDst)
+	}
+
+	if err := os.Rename(tmpDst, dst); err != nil {
+		os.Rename(backupDst, dst)
+		os.RemoveAll(tmpDst)
+		return fmt.Errorf("failed atomic directory rename: %w", err)
+	}
+
+	os.RemoveAll(backupDst)
+	return nil
 }
 
 func (e *Engine) copyFile(src, dst string) error {
@@ -374,20 +424,28 @@ func (e *Engine) copyFile(src, dst string) error {
 	}
 	defer in.Close()
 
-	out, err := os.Create(dst)
+	tmpDst := dst + ".tmp"
+	out, err := os.Create(tmpDst)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	_, err = io.Copy(out, in)
 	if err != nil {
+		out.Close()
+		os.Remove(tmpDst)
 		return err
 	}
+	out.Close()
 
 	info, err := os.Stat(src)
 	if err == nil {
-		os.Chmod(dst, info.Mode())
+		os.Chmod(tmpDst, info.Mode())
+	}
+
+	if err := os.Rename(tmpDst, dst); err != nil {
+		os.Remove(tmpDst)
+		return fmt.Errorf("failed atomic file rename: %w", err)
 	}
 
 	return nil
