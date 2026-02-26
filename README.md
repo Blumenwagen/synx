@@ -35,6 +35,8 @@ synx --help                # Full command list
 - **Profiles** — named presets for quick config switching
 - **Hooks** — custom pre/post sync and restore scripts
 - **History & rollback** — view commits, time-travel to previous states
+- **Package tracking** — snapshot and restore installed packages (pacman + AUR)
+- **Service tracking** — snapshot and restore enabled systemd services
 - **Bootstrap** — provision a new machine from a declarative config
 - **Doctor** — health checks and diagnostics
 
@@ -50,6 +52,8 @@ synx --help                # Full command list
 | Page | Description |
 |------|-------------|
 | [Commands](https://github.com/Blumenwagen/synx/wiki/Commands) | Full command reference |
+| [Packages](https://github.com/Blumenwagen/synx/wiki/Packages) | Package state tracking |
+| [Services](https://github.com/Blumenwagen/synx/wiki/Services) | Service state tracking |
 | [Profiles](https://github.com/Blumenwagen/synx/wiki/Profiles) | Config presets & animation switching |
 | [Hooks](https://github.com/Blumenwagen/synx/wiki/Hooks) | Custom sync/restore scripts |
 | [Multi-Machine](https://github.com/Blumenwagen/synx/wiki/Multi-Machine) | Per-hostname overrides |

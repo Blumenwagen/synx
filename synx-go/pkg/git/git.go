@@ -285,3 +285,51 @@ func (g *GitManager) UnpushedCount(branch string) (int, error) {
 	fmt.Sscanf(raw, "%d", &count)
 	return count, nil
 }
+
+// Commit structured data for Rollback TUI
+type Commit struct {
+	Hash    string
+	Message string
+	Date    string
+	Author  string
+}
+
+// LogStructured returns structured commit history.
+func (g *GitManager) LogStructured(limit int) ([]Commit, error) {
+	cmd := exec.Command("git", "log", fmt.Sprintf("-n%d", limit), "--format=%h|%s|%ar|%an")
+	cmd.Dir = g.RepoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	raw := strings.TrimSpace(string(out))
+	if raw == "" {
+		return nil, nil
+	}
+
+	var commits []Commit
+	for _, line := range strings.Split(raw, "\n") {
+		parts := strings.Split(line, "|")
+		if len(parts) >= 4 {
+			commits = append(commits, Commit{
+				Hash:    parts[0],
+				Message: parts[1],
+				Date:    parts[2],
+				Author:  parts[3],
+			})
+		}
+	}
+	return commits, nil
+}
+
+// ShowStat returns the stat diff for a specific commit hash.
+func (g *GitManager) ShowStat(hash string) (string, error) {
+	cmd := exec.Command("git", "show", "--stat", "--oneline", hash)
+	cmd.Dir = g.RepoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}

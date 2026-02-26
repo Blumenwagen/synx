@@ -49,7 +49,8 @@ func init() {
 	rootCmd.Flags().BoolVarP(&restoreFlag, "restore", "r", false, "Restore dotfiles from remote repository")
 	rootCmd.Flags().BoolVar(&listFlag, "list", false, "List tracked and available dotfiles")
 	rootCmd.Flags().BoolVar(&historyFlag, "history", false, "Show sync history")
-	rootCmd.Flags().IntVar(&rollbackFlag, "rollback", 0, "Rollback to n commits ago")
+	rootCmd.Flags().IntVar(&rollbackFlag, "rollback", -1, "Rollback to n commits ago (omit n for interactive UI)")
+	rootCmd.Flag("rollback").NoOptDefVal = "0"
 	rootCmd.Flags().StringVar(&addFlag, "add", "", "Add a dotfile to track")
 	rootCmd.Flags().StringVar(&removeFlag, "remove", "", "Remove a dotfile from tracking")
 	rootCmd.Flags().StringVar(&excludeFlag, "exclude", "", "Add exclude pattern and remove from repo")
@@ -128,7 +129,17 @@ func customHelp(cmd *cobra.Command, args []string) {
 	fmt.Printf("  %s                Update synx to the latest version\n", c("--update"))
 	fmt.Println()
 
-	fmt.Println(d("Run 'synx' with no flags to sync. Configs live in ~/.config/synx/"))
+	// Packages & Services
+	fmt.Println(h("PACKAGES & SERVICES"))
+	fmt.Printf("  %s %s              Snapshot installed packages\n", g("synx pkg"), c("sync"))
+	fmt.Printf("  %s %s            Package changes since last sync\n", g("synx pkg"), c("status"))
+	fmt.Printf("  %s %s           Install missing packages\n", g("synx pkg"), c("restore"))
+	fmt.Printf("  %s %s              Show saved package list\n", g("synx pkg"), c("list"))
+	fmt.Printf("  %s %s              Snapshot enabled services\n", g("synx svc"), c("sync"))
+	fmt.Printf("  %s %s            Service changes since last sync\n", g("synx svc"), c("status"))
+	fmt.Printf("  %s %s           Enable missing services\n", g("synx svc"), c("restore"))
+	fmt.Printf("  %s %s              Show saved service list\n", g("synx svc"), c("list"))
+	fmt.Println()
 	fmt.Println()
 }
 

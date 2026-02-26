@@ -146,6 +146,14 @@ func (e *Engine) SyncToRepo() (*SyncResult, error) {
 				e.copyFile(machExcSrc, machExcDst)
 			}
 		}
+
+		// Backup package and service lists
+		for _, name := range []string{"packages.native", "packages.foreign", "services.system", "services.user"} {
+			src := filepath.Join(e.Config.ConfigDir, name)
+			if _, err := os.Stat(src); err == nil {
+				e.copyFile(src, filepath.Join(synxDataDir, name))
+			}
+		}
 	}
 
 	return res, nil

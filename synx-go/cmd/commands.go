@@ -13,7 +13,9 @@ import (
 	"github.com/Blumenwagen/synx/pkg/config"
 	"github.com/Blumenwagen/synx/pkg/git"
 	"github.com/Blumenwagen/synx/pkg/hooks"
+	"github.com/Blumenwagen/synx/pkg/packages"
 	"github.com/Blumenwagen/synx/pkg/profiles"
+	"github.com/Blumenwagen/synx/pkg/services"
 	"github.com/Blumenwagen/synx/pkg/sync"
 	"github.com/Blumenwagen/synx/pkg/ui"
 	"github.com/spf13/cobra"
@@ -285,6 +287,15 @@ func runRestore(cfg *config.ConfigManager) {
 			copyFileSimple(eng.DotfileDir+"/.synx/exclude.conf", cfg.ExcludeCfg)
 			cfg.Load()
 		}
+
+		// Restore package and service lists
+		synxDataDir := eng.DotfileDir + "/.synx"
+		for _, name := range []string{"packages.native", "packages.foreign", "services.system", "services.user"} {
+			src := filepath.Join(synxDataDir, name)
+			if _, err := os.Stat(src); err == nil {
+				copyFileSimple(src, filepath.Join(cfg.ConfigDir, name))
+			}
+		}
 	}
 
 	res, err := eng.RestoreFromRepo()
@@ -444,8 +455,6 @@ func runHistory(cfg *config.ConfigManager) {
 }
 
 func runRollback(cfg *config.ConfigManager, steps int) {
-	ui.PrintHeader("⏪", "Rollback")
-
 	eng, _ := sync.NewEngine(cfg)
 	g := git.NewGitManager(eng.DotfileDir)
 
@@ -454,13 +463,28 @@ func runRollback(cfg *config.ConfigManager, steps int) {
 		os.Exit(1)
 	}
 
+	// If no steps provided, launch the interactive TUI
+	if steps <= 0 {
+		var err error
+		steps, err = ui.RunRollbackTUI(g)
+		if err != nil {
+			ui.Error("Rollback UI error: " + err.Error())
+			os.Exit(1)
+		}
+
+		// If 0 returned, the user canceled
+		if steps == 0 {
+			fmt.Println("Rollback canceled.")
+			return
+		}
+	}
+
+	ui.PrintHeader("⏪", "Rollback")
 	fmt.Println(ui.StyleYellow.Render("⚠ WARNING"))
 	fmt.Println("  This will reset your dotfiles repo to " + strconv.Itoa(steps) + " commit(s) ago.")
 	fmt.Println("  Current changes will be lost, and the remote GitHub repository")
 	fmt.Println("  will be force-pushed to match this rolled-back state.")
 	fmt.Println()
-
-	// Confirmation could go here (skipped for testing automation ease, or assume yes flag)
 
 	ui.Step(fmt.Sprintf("Rolling back %d commit(s)...", steps))
 	target, err := g.ResetHard(steps)
@@ -1066,6 +1090,32 @@ func runDoctor(cfg *config.ConfigManager) {
 			ui.Success(fmt.Sprintf("%d profile(s) available", len(pNames)))
 		}
 		passed++
+	}
+
+	// 13. Package state
+	nativePath := packages.NativeListPath(cfg.ConfigDir)
+	foreignPath := packages.ForeignListPath(cfg.ConfigDir)
+	nativeList, _ := packages.LoadList(nativePath)
+	foreignList, _ := packages.LoadList(foreignPath)
+	if nativeList != nil || foreignList != nil {
+		ui.Success(fmt.Sprintf("Package state: %d native, %d foreign (AUR)", len(nativeList), len(foreignList)))
+		passed++
+	} else {
+		ui.Warn("No saved package state — run 'synx pkg sync'")
+		warnings++
+	}
+
+	// 14. Service state
+	systemPath := services.SystemListPath(cfg.ConfigDir)
+	userPath := services.UserListPath(cfg.ConfigDir)
+	systemList, _ := services.LoadList(systemPath)
+	userList, _ := services.LoadList(userPath)
+	if systemList != nil || userList != nil {
+		ui.Success(fmt.Sprintf("Service state: %d system, %d user", len(systemList), len(userList)))
+		passed++
+	} else {
+		ui.Warn("No saved service state — run 'synx svc sync'")
+		warnings++
 	}
 
 	fmt.Println()
