@@ -1328,6 +1328,21 @@ func runUpdate() {
 		os.Exit(1)
 	}
 
+	// Check if installed via AUR/system package manager
+	if strings.HasPrefix(exePath, "/usr/bin/") || strings.HasPrefix(exePath, "/usr/local/bin/") || exePath == "/bin/synx" {
+		// Check if it's a symlink (our install.sh creates /bin/synx -> ...)
+		isSymlink := false
+		if info, err := os.Lstat(exePath); err == nil {
+			isSymlink = info.Mode()&os.ModeSymlink != 0
+		}
+
+		if !isSymlink {
+			ui.Info("synx was installed via a package manager.")
+			ui.Detail("Please use your package manager (e.g., yay -Syu) to update.")
+			return
+		}
+	}
+
 	realPath, err := filepath.EvalSymlinks(exePath)
 	if err != nil {
 		ui.Error("Cannot resolve binary path: " + err.Error())
