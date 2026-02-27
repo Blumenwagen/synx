@@ -13,11 +13,24 @@
 </div>
 
 <br>
+<div align="center">
+  <b>If you find synx useful, please ⭐ the repo &mdash; it helps others discover it!</b>
+</div>
+<br>
 <p align="center">
   <img src="readme.gif" alt="Synx Demo execution" width="100%" onerror="this.style.display='none';"> 
 </p>
 
-## Quick Start
+## 💻 Supported Platforms
+
+| Platform | Support Level | Description |
+| :--- | :---: | :--- |
+| 🐧 **Arch Linux** | 🟢 **Full** | First-class support. All features including pacman/AUR tracking and system bootstrapping. |
+| 🐧 **Other Linux** | 🟡 **Core** | Standard dotfile syncing, Git version control, and profiles work out of the box. |
+| 🍏 **macOS** | 🟡 **Core** | Core syncing capabilities are functional. System packages and services are unmanaged. |
+| 🪟 **Windows** | 🟡 **WSL** | Works seamlessly inside Windows Subsystem for Linux (WSL) for standard syncing. |
+
+## 🚀 Quick Start
 
 ### For Arch-Users an AUR build is available at synx-git:
 ```bash
@@ -50,19 +63,21 @@ synx --profile smooth      # Switch to a profile
 synx --help                # Full command list
 ```
 
-## Features
+## 🧩 Features
 
-- **Sync & push** — copy dotfiles to a git repo and push in one command
-- **Restore** — pull and restore dotfiles from remote
-- **Status & diff** — see what changed since last sync
-- **Dry-run** — preview operations without touching files
-- **Profiles** — named presets for quick config switching
-- **Hooks** — custom pre/post sync and restore scripts
-- **History & rollback** — view commits, time-travel to previous states
-- **Package tracking** — snapshot and restore installed packages (pacman + AUR)
-- **Service tracking** — snapshot and restore enabled systemd services
-- **Bootstrap** — provision a new machine from a declarative config
-- **Doctor** — health checks and diagnostics
+| Feature | Description |
+|---------|-------------|
+| 🔄 **Sync & push** | Push dotfiles and commits automatically in one command |
+| ⬇️ **Restore** | Pull and restore dotfiles from remote |
+| 🔍 **Status & diff** | See what changed since last sync |
+| 🧪 **Dry-run** | Preview operations without touching files |
+| 🎭 **Profiles** | Named presets for quick config switching |
+| 🪝 **Hooks** | Custom pre/post sync and restore scripts |
+| ⏪ **History & rollback** | View commits, time-travel to previous states |
+| 📦 **Package tracking** | Snapshot and restore installed packages (pacman + AUR) |
+| ⚙️ **Service tracking** | Snapshot and restore enabled systemd services |
+| 🚀 **Bootstrap** | Provision a new machine from a declarative config |
+| 🩺 **Doctor** | Health checks and diagnostics |
 
 > [!WARNING]
 > The bootstrap feature is designed for **Arch Linux** and Arch-based distributions.
