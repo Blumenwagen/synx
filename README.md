@@ -13,22 +13,11 @@
 </div>
 
 <br>
-<div align="center">
-  <b>If you find synx useful, please ⭐ the repo &mdash; it helps others discover it!</b>
-</div>
-<br>
+
 <p align="center">
   <img src="readme.gif" alt="Synx Demo execution" width="100%" onerror="this.style.display='none';"> 
 </p>
 
-## 💻 Supported Platforms
-
-| Platform | Support Level | Description |
-| :--- | :---: | :--- |
-| 🐧 **Arch Linux** | 🟢 **Full** | First-class support. All features including pacman/AUR tracking and system bootstrapping. |
-| 🐧 **Other Linux** | 🟡 **Core** | Standard dotfile syncing, Git version control, and profiles work out of the box. |
-| 🍏 **macOS** | 🟡 **Core** | Core syncing capabilities are functional. System packages and services are unmanaged. |
-| 🪟 **Windows** | 🟡 **WSL** | Works seamlessly inside Windows Subsystem for Linux (WSL) for standard syncing. |
 
 ## 🚀 Quick Start
 
@@ -49,6 +38,23 @@ cd synx
 ```
 
 Requires **git**, the installer will try to install **Go** on it's own but if this fails, you will need to manually install go for your system.
+
+<br>
+
+## 💻 Supported Platforms
+
+| Platform | Support Level | Description |
+| :--- | :---: | :--- |
+| 🐧 **Arch Linux** | 🟢 **Full** | All features including pacman/AUR tracking and system bootstrapping. |
+| 🐧 **Other Distros** | 🟡 **Core** | Standard dotfile syncing, Git version control, and profiles work out of the box. |
+| 🍏 **macOS** | 🟡 **Core** | Core syncing capabilities are functional. System packages and services are unmanaged. |
+| 🪟 **Windows** | 🟡 **WSL** | Should work seamlessly inside WSL for standard syncing. |
+
+<br>
+
+<div align="center">
+  <b>If you find synx useful, please ⭐ the repo &mdash; it helps others discover it!</b>
+</div>
 
 ## Basic Usage
 
