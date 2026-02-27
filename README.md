@@ -25,6 +25,8 @@
 ```bash
 # use your preferred AUR helper (yay, paru etc.)
 yay -S synx-git
+
+synx #first run will trigger the setup wizard
 ```
 > [!NOTE]
 > Note that the AUR version does **NOT** support "synx --update", instead you will need to update using your Package Manager of choice.
