@@ -10,7 +10,7 @@ cd synx
 ./install.sh
 ```
 
-Requires **Go** and **git**.
+Requires **git**, the installer will try to install go on it's own but if this fails, you will need to manually install go for your system.
 
 ## Basic Usage
 
