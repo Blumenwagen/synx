@@ -1,6 +1,6 @@
 # SYNX — Dotfile management Tool
 
-A fast CLI tool for managing dotfiles with git-based version control, multi-machine support, profiles, and full system bootstrapping. This is a personal project and therefore a bit opinionated. It is made to be easy to use and understand, not to be the best or most feature-rich tool out there.
+A fast and easy CLI tool for managing dotfiles with git-based version control, multi-machine support, profiles, and experimental full system bootstrapping. 
 
 ## Quick Start
 
@@ -56,7 +56,6 @@ synx --help                # Full command list
 | [Services](https://github.com/Blumenwagen/synx/wiki/Services) | Service state tracking |
 | [Profiles](https://github.com/Blumenwagen/synx/wiki/Profiles) | Config presets & animation switching |
 | [Hooks](https://github.com/Blumenwagen/synx/wiki/Hooks) | Custom sync/restore scripts |
-| [Multi-Machine](https://github.com/Blumenwagen/synx/wiki/Multi-Machine) | Handling multiple devices via profiles |
 | [Bootstrap](https://github.com/Blumenwagen/synx/wiki/Bootstrap) | New machine provisioning |
 | [Doctor](https://github.com/Blumenwagen/synx/wiki/Doctor) | Health checks & diagnostics |
 
