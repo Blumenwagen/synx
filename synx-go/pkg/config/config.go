@@ -9,16 +9,15 @@ import (
 )
 
 type ConfigManager struct {
-	ConfigDir            string
-	SynxConfig           string
-	ExcludeCfg           string
-	SynxConfigMachine    string
-	ExcludeCfgMachine    string
-	Hostname             string
-	UsingMachineTargets  bool
-	UsingMachineExcludes bool
-	Targets              []string
-	Excludes             []string
+	ConfigDir       string
+	SynxConfig      string
+	ExcludeCfg      string
+	Hostname        string
+	ActiveProfile   string
+	Targets         []string
+	Excludes        []string
+	ProfileTargets  []string
+	ProfileExcludes []string
 }
 
 func NewConfigManager() (*ConfigManager, error) {
@@ -36,14 +35,14 @@ func NewConfigManager() (*ConfigManager, error) {
 	hostname, _ := os.Hostname()
 
 	return &ConfigManager{
-		ConfigDir:         cfgDir,
-		SynxConfig:        filepath.Join(cfgDir, "synx.conf"),
-		ExcludeCfg:        filepath.Join(cfgDir, "exclude.conf"),
-		SynxConfigMachine: filepath.Join(cfgDir, "synx.conf."+hostname),
-		ExcludeCfgMachine: filepath.Join(cfgDir, "exclude.conf."+hostname),
-		Hostname:          hostname,
-		Targets:           []string{},
-		Excludes:          []string{},
+		ConfigDir:       cfgDir,
+		SynxConfig:      filepath.Join(cfgDir, "synx.conf"),
+		ExcludeCfg:      filepath.Join(cfgDir, "exclude.conf"),
+		Hostname:        hostname,
+		Targets:         []string{},
+		Excludes:        []string{},
+		ProfileTargets:  []string{},
+		ProfileExcludes: []string{},
 	}, nil
 }
 
@@ -63,20 +62,11 @@ func (c *ConfigManager) Load() error {
 		}
 	}
 
-	if _, err := os.Stat(c.SynxConfigMachine); err == nil {
-		targets, err := readFileLines(c.SynxConfigMachine)
-		if err != nil {
-			return err
-		}
-		c.Targets = targets
-		c.UsingMachineTargets = true
-	} else {
-		targets, err := readFileLines(c.SynxConfig)
-		if err != nil {
-			return err
-		}
-		c.Targets = targets
+	targets, err := readFileLines(c.SynxConfig)
+	if err != nil {
+		return err
 	}
+	c.Targets = targets
 
 	excludes, err := readFileLines(c.ExcludeCfg)
 	if err != nil {
@@ -84,13 +74,19 @@ func (c *ConfigManager) Load() error {
 	}
 	c.Excludes = excludes
 
-	if _, err := os.Stat(c.ExcludeCfgMachine); err == nil {
-		machineExcludes, err := readFileLines(c.ExcludeCfgMachine)
-		if err != nil {
-			return err
+	activeProfilePath := filepath.Join(c.ConfigDir, "active_profile")
+	if data, err := os.ReadFile(activeProfilePath); err == nil {
+		c.ActiveProfile = strings.TrimSpace(string(data))
+	}
+
+	if c.ActiveProfile != "" {
+		profileDir := filepath.Join(c.ConfigDir, "profiles", c.ActiveProfile)
+		if profTargets, err := readFileLines(filepath.Join(profileDir, "targets.conf")); err == nil {
+			c.ProfileTargets = profTargets
 		}
-		c.Excludes = append(c.Excludes, machineExcludes...)
-		c.UsingMachineExcludes = true
+		if profExcludes, err := readFileLines(filepath.Join(profileDir, "excludes.conf")); err == nil {
+			c.ProfileExcludes = profExcludes
+		}
 	}
 
 	return nil
@@ -104,28 +100,47 @@ func (c *ConfigManager) SaveExcludes(excludes []string) error {
 	return writeLines(c.ExcludeCfg, excludes, "Exclude patterns for machine-specific files\n# One pattern per line")
 }
 
-func (c *ConfigManager) SaveTargetsMachine(targets []string) error {
-	return writeLines(c.SynxConfigMachine, targets, "Synx tracked dotfiles for "+c.Hostname)
+func (c *ConfigManager) SaveProfileTargets(profile string, targets []string) error {
+	path := filepath.Join(c.ConfigDir, "profiles", profile, "targets.conf")
+	os.MkdirAll(filepath.Dir(path), 0755)
+	return writeLines(path, targets, "Synx tracked dotfiles for profile "+profile)
 }
 
-func (c *ConfigManager) SaveExcludesMachine(excludes []string) error {
-	return writeLines(c.ExcludeCfgMachine, excludes, "Exclude patterns for "+c.Hostname)
+func (c *ConfigManager) SaveProfileExcludes(profile string, excludes []string) error {
+	path := filepath.Join(c.ConfigDir, "profiles", profile, "excludes.conf")
+	os.MkdirAll(filepath.Dir(path), 0755)
+	return writeLines(path, excludes, "Exclude patterns for profile "+profile)
 }
 
-// MachineExcludes returns only the machine-specific excludes (not including base).
-func (c *ConfigManager) MachineExcludes() ([]string, error) {
-	if _, err := os.Stat(c.ExcludeCfgMachine); os.IsNotExist(err) {
-		return []string{}, nil
+// IsProfileTarget checks if a target is explicitly tracked by the active profile.
+func (c *ConfigManager) IsProfileTarget(target string) bool {
+	if c.ActiveProfile == "" {
+		return false
 	}
-	return readFileLines(c.ExcludeCfgMachine)
+	for _, pt := range c.ProfileTargets {
+		if pt == target {
+			return true
+		}
+	}
+	return false
 }
 
-// MachineTargets returns only the machine-specific targets.
-func (c *ConfigManager) MachineTargets() ([]string, error) {
-	if _, err := os.Stat(c.SynxConfigMachine); err == nil {
-		return readFileLines(c.SynxConfigMachine)
+// GetAllTargets returns a deduplicated list of base targets and active profile targets.
+func (c *ConfigManager) GetAllTargets() []string {
+	m := make(map[string]bool)
+	for _, t := range c.Targets {
+		m[t] = true
 	}
-	return []string{}, nil
+	if c.ActiveProfile != "" {
+		for _, pt := range c.ProfileTargets {
+			m[pt] = true
+		}
+	}
+	var res []string
+	for t := range m {
+		res = append(res, t)
+	}
+	return res
 }
 
 // GetGlobalTargets scans all synx.conf* files in ~/.config/synx
@@ -160,11 +175,16 @@ func (c *ConfigManager) GetGlobalTargets() ([]string, error) {
 }
 
 func (c *ConfigManager) IsExcluded(path string) bool {
-	if len(c.Excludes) == 0 {
+	allExcludes := append([]string{}, c.Excludes...)
+	if c.ActiveProfile != "" {
+		allExcludes = append(allExcludes, c.ProfileExcludes...)
+	}
+
+	if len(allExcludes) == 0 {
 		return false
 	}
 
-	for _, pattern := range c.Excludes {
+	for _, pattern := range allExcludes {
 		if path == pattern {
 			return true
 		}

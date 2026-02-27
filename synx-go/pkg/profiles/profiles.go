@@ -2,8 +2,6 @@ package profiles
 
 import (
 	"fmt"
-	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,77 +67,19 @@ func DeleteProfile(profilesDir, name string) error {
 	return os.RemoveAll(dir)
 }
 
-// ApplyProfile copies all overlay files from the profile directory into baseConfigDir (~/.config).
-// It preserves directory structure. Returns the number of files copied.
-func ApplyProfile(profilesDir, name, baseConfigDir string) (int, error) {
-	profileDir := filepath.Join(profilesDir, name)
-	if _, err := os.Stat(profileDir); os.IsNotExist(err) {
-		return 0, fmt.Errorf("profile '%s' does not exist", name)
+// ProfileTargetCount returns the number of explicit targets tracked by the profile.
+func ProfileTargetCount(profilesDir, name string) int {
+	data, err := os.ReadFile(filepath.Join(profilesDir, name, "targets.conf"))
+	if err != nil {
+		return 0
 	}
-
 	count := 0
-	err := filepath.WalkDir(profileDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+	lines := strings.Split(string(data), "\n")
+	for _, l := range lines {
+		l = strings.TrimSpace(l)
+		if l != "" && !strings.HasPrefix(l, "#") {
+			count++
 		}
-		if d.IsDir() {
-			return nil
-		}
-
-		base := d.Name()
-		if base == "targets.conf" || base == "excludes.conf" {
-			return nil
-		}
-
-		relPath, _ := filepath.Rel(profileDir, path)
-		destPath := filepath.Join(baseConfigDir, relPath)
-
-		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-			return err
-		}
-
-		if err := copyFile(path, destPath); err != nil {
-			return fmt.Errorf("failed to copy %s: %w", relPath, err)
-		}
-		count++
-		return nil
-	})
-
-	return count, err
-}
-
-// ProfileFiles returns a list of files in a profile (relative paths).
-func ProfileFiles(profilesDir, name string) ([]string, error) {
-	profileDir := filepath.Join(profilesDir, name)
-	if _, err := os.Stat(profileDir); os.IsNotExist(err) {
-		return nil, fmt.Errorf("profile '%s' does not exist", name)
 	}
-
-	var files []string
-	filepath.WalkDir(profileDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		relPath, _ := filepath.Rel(profileDir, path)
-		files = append(files, relPath)
-		return nil
-	})
-	return files, nil
-}
-
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, in)
-	return err
+	return count
 }

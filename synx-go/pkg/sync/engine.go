@@ -45,9 +45,13 @@ func (e *Engine) SyncToRepo() (*SyncResult, error) {
 
 	res := &SyncResult{}
 
-	for _, target := range e.Config.Targets {
+	for _, target := range e.Config.GetAllTargets() {
 		srcPath := filepath.Join(e.ConfigDir, target)
 		destPath := filepath.Join(e.DotfileDir, target)
+
+		if e.Config.IsProfileTarget(target) {
+			destPath = filepath.Join(e.DotfileDir, "profiles", e.Config.ActiveProfile, target)
+		}
 
 		resolvedSrc, err := filepath.EvalSymlinks(srcPath)
 		if err != nil {
@@ -130,20 +134,6 @@ func (e *Engine) SyncToRepo() (*SyncResult, error) {
 			e.copyFile(excSrc, excDst)
 		}
 
-		if e.Config.Hostname != "" {
-			machSynxSrc := e.Config.SynxConfigMachine
-			machSynxDst := filepath.Join(synxDataDir, "synx.conf."+e.Config.Hostname)
-			if _, err := os.Stat(machSynxSrc); err == nil {
-				e.copyFile(machSynxSrc, machSynxDst)
-			}
-
-			machExcSrc := e.Config.ExcludeCfgMachine
-			machExcDst := filepath.Join(synxDataDir, "exclude.conf."+e.Config.Hostname)
-			if _, err := os.Stat(machExcSrc); err == nil {
-				e.copyFile(machExcSrc, machExcDst)
-			}
-		}
-
 		for _, name := range []string{"packages.native", "packages.foreign", "services.system", "services.user"} {
 			src := filepath.Join(e.Config.ConfigDir, name)
 			if _, err := os.Stat(src); err == nil {
@@ -163,8 +153,11 @@ type RestoreResult struct {
 func (e *Engine) RestoreFromRepo() (*RestoreResult, error) {
 	res := &RestoreResult{}
 
-	for _, target := range e.Config.Targets {
+	for _, target := range e.Config.GetAllTargets() {
 		srcPath := filepath.Join(e.DotfileDir, target)
+		if e.Config.IsProfileTarget(target) {
+			srcPath = filepath.Join(e.DotfileDir, "profiles", e.Config.ActiveProfile, target)
+		}
 		destPath := filepath.Join(e.ConfigDir, target)
 
 		info, err := os.Stat(srcPath)

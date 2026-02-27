@@ -11,7 +11,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "synx",
 	Short: "Dotfile backup system",
-	Long:  "A powerful CLI tool for managing dotfiles with git-based version control, machine-specific exclusions, and full system bootstrapping.",
+	Long:  "A powerful CLI tool for managing dotfiles with git-based version control, profiles for smart overrides, and full system bootstrapping.",
 	Run: func(cmd *cobra.Command, args []string) {
 		if versionFlag {
 			fmt.Println("synx version " + Version)
@@ -37,7 +37,6 @@ var (
 	bsSetupFlag       bool
 	bootstrapFlag     string
 	yesFlag           bool
-	machineFlag       bool
 	statusFlag        bool
 	dryRunFlag        bool
 	doctorFlag        bool
@@ -65,7 +64,6 @@ func init() {
 	rootCmd.Flags().BoolVar(&bsSetupFlag, "bootstrap-setup", false, "Create bootstrap config interactively")
 	rootCmd.Flags().StringVar(&bootstrapFlag, "bootstrap", "", "Run bootstrap from local config or clone provided repo URL")
 	rootCmd.Flags().BoolVar(&yesFlag, "yes", false, "Skip per-step confirmations on bootstrap")
-	rootCmd.Flags().BoolVarP(&machineFlag, "machine", "m", false, "Target machine-specific config instead of shared base")
 	rootCmd.Flags().BoolVarP(&statusFlag, "status", "s", false, "Show what changed since last sync")
 	rootCmd.Flags().BoolVarP(&dryRunFlag, "dry-run", "n", false, "Preview sync/restore without making changes")
 	rootCmd.Flags().BoolVar(&doctorFlag, "doctor", false, "Run health checks on synx setup")
@@ -89,59 +87,58 @@ func customHelp(cmd *cobra.Command, args []string) {
 	fmt.Println()
 	fmt.Println(h("SYNX") + d(" — dotfile backup system"))
 	fmt.Println(d("A fast CLI tool for managing dotfiles with git-backed sync,"))
-	fmt.Println(d("multi-machine support, profiles, and full system bootstrapping."))
+	fmt.Println(d("profiles for smart overrides, and full system bootstrapping."))
 	fmt.Println()
 
 	fmt.Println(h("SYNC & RESTORE"))
-	fmt.Printf("  %s                         Sync dotfiles to remote\n", g("synx"))
-	fmt.Printf("  %s %s                  Restore from remote\n", g("synx"), c("-r, --restore"))
-	fmt.Printf("  %s %s                  Preview without changes\n", g("synx"), c("-n, --dry-run"))
+	fmt.Printf("  %s                            Sync dotfiles to remote\n", g("synx"))
+	fmt.Printf("  %s %s               Restore from remote\n", g("synx"), c("-r, --restore"))
+	fmt.Printf("  %s %s               Preview without changes\n", g("synx"), c("-n, --dry-run"))
 	fmt.Println()
 
 	fmt.Println(h("STATUS & DIAGNOSTICS"))
-	fmt.Printf("  %s %s                   Show changes since last sync\n", g("synx"), c("-s, --status"))
+	fmt.Printf("  %s %s                Show changes since last sync\n", g("synx"), c("-s, --status"))
 	fmt.Printf("  %s %s               Compare local vs remote\n", g("synx"), c("--remote-diff"))
 	fmt.Printf("  %s %s                    Run health checks\n", g("synx"), c("--doctor"))
 	fmt.Printf("  %s %s                   Show sync history\n", g("synx"), c("--history"))
 	fmt.Println()
 
 	fmt.Println(h("TARGET MANAGEMENT"))
-	fmt.Printf("  %s %s               Track a new dotfile directory\n", g("synx"), c("--add <name>"))
-	fmt.Printf("  %s %s            Stop tracking a dotfile\n", g("synx"), c("--remove <name>"))
-	fmt.Printf("  %s %s             Clean orphaned files from repo\n", g("synx"), c("--clean"))
-	fmt.Printf("  %s %s          Exclude a file pattern\n", g("synx"), c("--exclude <path>"))
+	fmt.Printf("  %s %s                Track a new dotfile directory\n", g("synx"), c("--add <name>"))
+	fmt.Printf("  %s %s             Stop tracking a dotfile\n", g("synx"), c("--remove <name>"))
+	fmt.Printf("  %s %s                     Clean orphaned files from repo\n", g("synx"), c("--clean"))
+	fmt.Printf("  %s %s            Exclude a file pattern\n", g("synx"), c("--exclude <path>"))
 	fmt.Printf("  %s %s                      List tracked dotfiles\n", g("synx"), c("--list"))
 	fmt.Printf("  %s %s              Rollback n commits\n", g("synx"), c("--rollback <n>"))
 	fmt.Println()
 
 	fmt.Println(h("PROFILES"))
-	fmt.Printf("  %s %s         Apply a named profile\n", g("synx"), c("--profile <name>"))
+	fmt.Printf("  %s %s            Apply a named profile\n", g("synx"), c("--profile <name>"))
 	fmt.Printf("  %s %s              List available profiles\n", g("synx"), c("--profile-list"))
-	fmt.Printf("  %s %s  Create a new empty profile\n", g("synx"), c("--profile-create <name>"))
-	fmt.Printf("  %s %s  Delete a profile\n", g("synx"), c("--profile-delete <name>"))
+	fmt.Printf("  %s %s     Create a new empty profile\n", g("synx"), c("--profile-create <name>"))
+	fmt.Printf("  %s %s     Delete a profile\n", g("synx"), c("--profile-delete <name>"))
 	fmt.Println()
 
 	fmt.Println(h("BOOTSTRAP"))
-	fmt.Printf("  %s %s          Create bootstrap config\n", g("synx"), c("--bootstrap-setup"))
-	fmt.Printf("  %s %s       Clone & bootstrap from URL\n", g("synx"), c("--bootstrap <url>"))
+	fmt.Printf("  %s %s           Create bootstrap config\n", g("synx"), c("--bootstrap-setup"))
+	fmt.Printf("  %s %s           Clone & bootstrap from URL\n", g("synx"), c("--bootstrap <url>"))
 	fmt.Println()
 
 	fmt.Println(h("MODIFIERS"))
-	fmt.Printf("  %s              Target machine-specific config\n", c("-m, --machine"))
-	fmt.Printf("  %s                   Skip confirmations (bootstrap)\n", c("--yes"))
-	fmt.Printf("  %s                Update synx to the latest version\n", c("--update"))
-	fmt.Printf("  %s               Print the current synx version\n", c("-v, --version"))
+	fmt.Printf("  %s                            Skip confirmations (bootstrap)\n", c("--yes"))
+	fmt.Printf("  %s                         Update synx to the latest version\n", c("--update"))
+	fmt.Printf("  %s                    Print the current synx version\n", c("-v, --version"))
 	fmt.Println()
 
 	fmt.Println(h("PACKAGES & SERVICES"))
-	fmt.Printf("  %s %s              Snapshot installed packages\n", g("synx pkg"), c("sync"))
-	fmt.Printf("  %s %s            Package changes since last sync\n", g("synx pkg"), c("status"))
-	fmt.Printf("  %s %s           Install missing packages\n", g("synx pkg"), c("restore"))
-	fmt.Printf("  %s %s              Show saved package list\n", g("synx pkg"), c("list"))
-	fmt.Printf("  %s %s              Snapshot enabled services\n", g("synx svc"), c("sync"))
-	fmt.Printf("  %s %s            Service changes since last sync\n", g("synx svc"), c("status"))
-	fmt.Printf("  %s %s           Enable missing services\n", g("synx svc"), c("restore"))
-	fmt.Printf("  %s %s              Show saved service list\n", g("synx svc"), c("list"))
+	fmt.Printf("  %s %s                    Snapshot installed packages\n", g("synx pkg"), c("sync"))
+	fmt.Printf("  %s %s                  Package changes since last sync\n", g("synx pkg"), c("status"))
+	fmt.Printf("  %s %s                 Install missing packages\n", g("synx pkg"), c("restore"))
+	fmt.Printf("  %s %s                    Show saved package list\n", g("synx pkg"), c("list"))
+	fmt.Printf("  %s %s                    Snapshot enabled services\n", g("synx svc"), c("sync"))
+	fmt.Printf("  %s %s                  Service changes since last sync\n", g("synx svc"), c("status"))
+	fmt.Printf("  %s %s                 Enable missing services\n", g("synx svc"), c("restore"))
+	fmt.Printf("  %s %s                    Show saved service list\n", g("synx svc"), c("list"))
 	fmt.Println()
 	fmt.Println()
 }

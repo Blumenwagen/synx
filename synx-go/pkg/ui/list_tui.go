@@ -16,14 +16,14 @@ import (
 type dotfileItem struct {
 	name          string
 	isTracked     bool
-	isMachineOnly bool
+	isProfileOnly bool
 	isSymlink     bool
 	exists        bool
 }
 
 func (i dotfileItem) Title() string {
 	if i.isTracked {
-		if i.isMachineOnly {
+		if i.isProfileOnly {
 			return TUITrackedStyle.Render("✓ ") + TUIMachineStyle.Render(i.name)
 		}
 		return TUITrackedStyle.Render("✓ " + i.name)
@@ -99,14 +99,14 @@ func (m listModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if i.isTracked {
 			b.WriteString(TUITrackedStyle.Render("Status: Tracked by Synx") + "\n")
-			if i.isMachineOnly {
-				b.WriteString(TUIMachineStyle.Render(fmt.Sprintf("Scope: %s overrides only", m.cfg.Hostname)) + "\n")
+			if i.isProfileOnly {
+				b.WriteString(TUIMachineStyle.Render(fmt.Sprintf("Scope: %s profile overrides", m.cfg.ActiveProfile)) + "\n")
 			} else {
 				b.WriteString("Scope: Base configuration\n")
 			}
 		} else {
 			b.WriteString(TUIMutedStyle.Render("Status: Untracked") + "\n")
-			b.WriteString("\n" + TUIActiveStyle.Render("Press [Enter] to add to synx.") + "\n")
+			b.WriteString("\n" + TUIActiveStyle.Render("Press [Enter] to add to synx base targets.") + "\n")
 		}
 
 		b.WriteString("\n")
@@ -145,28 +145,17 @@ func RunListTUI(cfg *config.ConfigManager) (string, error) {
 	baseConfigDir := filepath.Join(home, ".config")
 
 	targetMap := make(map[string]bool)
-	machineOnlyMap := make(map[string]bool)
+	profileOnlyMap := make(map[string]bool)
 
 	for _, t := range cfg.Targets {
 		targetMap[t] = true
 	}
 
-	if cfg.UsingMachineTargets {
-		baseTargetsRaw, _ := os.ReadFile(filepath.Join(home, ".synx", "targets.conf"))
-		baseLines := strings.Split(string(baseTargetsRaw), "\n")
-		baseMap := make(map[string]bool)
-		for _, l := range baseLines {
-			l = strings.TrimSpace(l)
-			if l != "" && !strings.HasPrefix(l, "#") {
-				baseMap[l] = true
-			}
+	for _, pt := range cfg.ProfileTargets {
+		if !targetMap[pt] {
+			profileOnlyMap[pt] = true
 		}
-
-		for _, t := range cfg.Targets {
-			if !baseMap[t] {
-				machineOnlyMap[t] = true
-			}
-		}
+		targetMap[pt] = true // Include profile targets in the main list
 	}
 
 	entries, _ := os.ReadDir(baseConfigDir)
@@ -174,13 +163,13 @@ func RunListTUI(cfg *config.ConfigManager) (string, error) {
 	seenDirs := make(map[string]bool)
 	var items []list.Item
 
-	for _, t := range cfg.Targets {
+	for t := range targetMap {
 		seenDirs[t] = true
 		info, err := os.Lstat(filepath.Join(baseConfigDir, t))
 		items = append(items, dotfileItem{
 			name:          t,
 			isTracked:     true,
-			isMachineOnly: machineOnlyMap[t],
+			isProfileOnly: profileOnlyMap[t],
 			exists:        err == nil,
 			isSymlink:     err == nil && info.Mode()&os.ModeSymlink != 0,
 		})
@@ -193,7 +182,7 @@ func RunListTUI(cfg *config.ConfigManager) (string, error) {
 			items = append(items, dotfileItem{
 				name:          name,
 				isTracked:     false,
-				isMachineOnly: false,
+				isProfileOnly: false,
 				exists:        true,
 				isSymlink:     info.Mode()&os.ModeSymlink != 0,
 			})

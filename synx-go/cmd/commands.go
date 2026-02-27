@@ -138,8 +138,8 @@ func runSync(cfg *config.ConfigManager) {
 		title += " (" + cfg.Hostname + ")"
 	}
 	ui.PrintHeader("🚀", title)
-	if cfg.UsingMachineTargets {
-		ui.Detail("Using machine-specific targets")
+	if cfg.ActiveProfile != "" {
+		ui.Detail("Using profile: " + cfg.ActiveProfile)
 	}
 	if dryRunFlag {
 		ui.Info("Dry-run mode — no files will be modified")
@@ -191,7 +191,7 @@ func runSync(cfg *config.ConfigManager) {
 
 	if !g.HasChanges() {
 		ui.Info("No changes to commit")
-		os.Exit(0)
+		return
 	}
 
 	ui.Step("Committing changes...")
@@ -438,57 +438,41 @@ func runRollback(cfg *config.ConfigManager, steps int) {
 }
 
 func runAdd(cfg *config.ConfigManager, target string) {
-	for _, t := range cfg.Targets {
-		if t == target {
-			ui.Warn("'" + target + "' is already tracked")
+	if cfg.ActiveProfile != "" {
+		ui.Info("Profile '" + cfg.ActiveProfile + "' is active.")
+		fmt.Printf("  %s Add '%s' as an explicit override for this profile? [Y/n]: ", ui.StyleCyan.Render("▸"), target)
+
+		var choice string
+		fmt.Scanln(&choice)
+		choice = strings.ToLower(strings.TrimSpace(choice))
+
+		if choice == "" || choice == "y" || choice == "yes" {
+			if cfg.IsProfileTarget(target) {
+				ui.Warn("'" + target + "' is already in profile overrides")
+				return
+			}
+			cfg.ProfileTargets = append(cfg.ProfileTargets, target)
+			cfg.SaveProfileTargets(cfg.ActiveProfile, cfg.ProfileTargets)
+			ui.Success("Added '" + target + "' to profile '" + cfg.ActiveProfile + "'")
 			return
+		} else {
+			ui.Detail("Skipped adding to profile. Adding to base config instead.")
 		}
 	}
 
-	if machineFlag {
-		cfg.Targets = append(cfg.Targets, target)
-		cfg.SaveTargetsMachine(cfg.Targets)
-		ui.Success("Added '" + target + "' to tracked dotfiles (" + cfg.Hostname + ")")
-		return
-	}
-
-	baseTargets, _ := readBaseTargets(cfg)
 	alreadyInBase := false
-	for _, bt := range baseTargets {
+	for _, bt := range cfg.Targets {
 		if bt == target {
 			alreadyInBase = true
 			break
 		}
 	}
 	if !alreadyInBase {
-		baseTargets = append(baseTargets, target)
-		cfg.SaveTargets(baseTargets)
+		cfg.Targets = append(cfg.Targets, target)
+		cfg.SaveTargets(cfg.Targets)
 		ui.Success("Added '" + target + "' to base tracked dotfiles")
-	}
-
-	if cfg.UsingMachineTargets {
-		ui.Warn("You're using machine-specific targets on this machine (" + cfg.Hostname + ")")
-		ui.Info("Adding to base config alone won't affect this machine.")
-		fmt.Printf("  %s Also add '%s' to %s config? [y/n]: ", ui.StyleCyan.Render("▸"), target, cfg.Hostname)
-
-		var choice string
-		fmt.Scanln(&choice)
-		choice = strings.ToLower(strings.TrimSpace(choice))
-
-		if choice == "y" || choice == "yes" {
-			machineTargets, _ := cfg.MachineTargets()
-			for _, mt := range machineTargets {
-				if mt == target {
-					ui.Info("'" + target + "' is already in machine config")
-					return
-				}
-			}
-			machineTargets = append(machineTargets, target)
-			cfg.SaveTargetsMachine(machineTargets)
-			ui.Success("Added '" + target + "' to machine targets (" + cfg.Hostname + ")")
-		} else {
-			ui.Detail("Skipped — only added to base config")
-		}
+	} else {
+		ui.Warn("'" + target + "' is already in base tracked dotfiles")
 	}
 }
 
@@ -507,13 +491,8 @@ func runRemove(cfg *config.ConfigManager, target string) {
 		return
 	}
 	cfg.Targets = newTargets
-	if machineFlag {
-		cfg.SaveTargetsMachine(cfg.Targets)
-		ui.Success("Removed '" + target + "' from tracked dotfiles (" + cfg.Hostname + ")")
-	} else {
-		cfg.SaveTargets(cfg.Targets)
-		ui.Success("Removed '" + target + "' from tracked dotfiles")
-	}
+	cfg.SaveTargets(cfg.Targets)
+	ui.Success("Removed '" + target + "' from tracked dotfiles")
 }
 
 func runClean(cfg *config.ConfigManager) {
@@ -624,17 +603,9 @@ func runExclude(cfg *config.ConfigManager, pattern string) {
 		}
 	}
 
-	if machineFlag {
-		machineExcludes, _ := cfg.MachineExcludes()
-		machineExcludes = append(machineExcludes, pattern)
-		cfg.SaveExcludesMachine(machineExcludes)
-		cfg.Excludes = append(cfg.Excludes, pattern)
-		ui.Success("Added '" + pattern + "' to exclude patterns (" + cfg.Hostname + ")")
-	} else {
-		cfg.Excludes = append(cfg.Excludes, pattern)
-		cfg.SaveExcludes(cfg.Excludes)
-		ui.Success("Added '" + pattern + "' to exclude patterns")
-	}
+	cfg.Excludes = append(cfg.Excludes, pattern)
+	cfg.SaveExcludes(cfg.Excludes)
+	ui.Success("Added '" + pattern + "' to exclude patterns")
 
 	eng, _ := sync.NewEngine(cfg)
 	g := git.NewGitManager(eng.DotfileDir)
@@ -839,9 +810,13 @@ func runStatus(cfg *config.ConfigManager) {
 	deleted := 0
 	unchanged := 0
 
-	for _, target := range cfg.Targets {
+	for _, target := range cfg.GetAllTargets() {
 		srcPath := filepath.Join(eng.ConfigDir, target)
 		destPath := filepath.Join(eng.DotfileDir, target)
+
+		if cfg.IsProfileTarget(target) {
+			destPath = filepath.Join(eng.DotfileDir, "profiles", cfg.ActiveProfile, target)
+		}
 
 		if resolved, err := filepath.EvalSymlinks(srcPath); err == nil {
 			srcPath = resolved
@@ -967,12 +942,13 @@ func runDoctor(cfg *config.ConfigManager) {
 		}
 	}
 
-	ui.Success(fmt.Sprintf("%d targets tracked", len(cfg.Targets)))
+	allTargets := cfg.GetAllTargets()
+	ui.Success(fmt.Sprintf("%d targets tracked", len(allTargets)))
 	passed++
 
 	home, _ := os.UserHomeDir()
 	baseConfigDir := home + "/.config"
-	for _, t := range cfg.Targets {
+	for _, t := range allTargets {
 		path := filepath.Join(baseConfigDir, t)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			ui.Warn(fmt.Sprintf("Target '%s' does not exist in ~/.config", t))
@@ -981,7 +957,7 @@ func runDoctor(cfg *config.ConfigManager) {
 	}
 
 	brokenSymlinks := 0
-	for _, t := range cfg.Targets {
+	for _, t := range allTargets {
 		path := filepath.Join(baseConfigDir, t)
 		info, err := os.Lstat(path)
 		if err != nil {
@@ -1003,7 +979,7 @@ func runDoctor(cfg *config.ConfigManager) {
 
 	popularConfigs := []string{"waybar", "rofi", "nvim", "fish", "zsh", "tmux", "starship", "wezterm", "sway", "i3", "polybar", "dunst", "picom", "neofetch", "wofi"}
 	targetSet := make(map[string]bool)
-	for _, t := range cfg.Targets {
+	for _, t := range allTargets {
 		targetSet[t] = true
 	}
 	var untracked []string
@@ -1033,7 +1009,7 @@ func runDoctor(cfg *config.ConfigManager) {
 				}
 			}
 			if !matches {
-				for _, t := range cfg.Targets {
+				for _, t := range allTargets {
 					if strings.HasPrefix(exc, t+"/") || exc == t {
 						matches = true
 						break
@@ -1049,13 +1025,8 @@ func runDoctor(cfg *config.ConfigManager) {
 
 	if cfg.Hostname != "" {
 		msg := "Machine: " + cfg.Hostname
-		if cfg.UsingMachineTargets {
-			msg += " (using machine-specific targets)"
-		} else {
-			msg += " (using base targets)"
-		}
-		if cfg.UsingMachineExcludes {
-			msg += " + machine excludes"
+		if cfg.ActiveProfile != "" {
+			msg += " (using profile: " + cfg.ActiveProfile + ")"
 		}
 		ui.Success(msg)
 		passed++
@@ -1138,32 +1109,27 @@ func runProfileApply(cfg *config.ConfigManager, name string) {
 	ui.PrintHeader("🎨", "Apply Profile")
 
 	profilesDir := filepath.Join(cfg.ConfigDir, "profiles")
-	home, _ := os.UserHomeDir()
-	baseConfigDir := filepath.Join(home, ".config")
 
-	ui.Step(fmt.Sprintf("Applying profile '%s'...", name))
-
-	count, err := profiles.ApplyProfile(profilesDir, name, baseConfigDir)
-	if err != nil {
-		ui.Error(err.Error())
+	profileDir := filepath.Join(profilesDir, name)
+	if _, err := os.Stat(profileDir); os.IsNotExist(err) {
+		ui.Error(fmt.Sprintf("Profile '%s' does not exist", name))
 		os.Exit(1)
 	}
+
+	ui.Step(fmt.Sprintf("Syncing current state before profile switch..."))
+	runSync(cfg)
 
 	if err := profiles.SetActiveProfile(cfg.ConfigDir, name); err != nil {
 		ui.Warn("Could not save active profile marker")
 	}
 
-	ui.Success(fmt.Sprintf("Applied %d overlay file(s)", count))
+	cfg.Load()
 
-	files, _ := profiles.ProfileFiles(profilesDir, name)
-	for _, f := range files {
-		if f != "targets.conf" && f != "excludes.conf" {
-			ui.Detail(f)
-		}
-	}
+	fmt.Println()
+	runRestore(cfg)
 
-	for _, f := range files {
-		if strings.HasPrefix(f, "hypr/") {
+	for _, t := range cfg.ProfileTargets {
+		if strings.HasPrefix(t, "hypr/") || t == "hypr" {
 			if _, err := os.Stat("/usr/bin/hyprctl"); err == nil {
 				fmt.Println()
 				ui.Step("Reloading Hyprland...")
@@ -1195,17 +1161,15 @@ func runProfileList(cfg *config.ConfigManager) {
 	if len(names) == 0 {
 		ui.Detail("No profiles found")
 		ui.Detail("Create one with: synx --profile-create <name>")
-		ui.Detail("Then add overlay files to ~/.config/synx/profiles/<name>/")
 		fmt.Println()
 		return
 	}
 
 	for _, name := range names {
-		files, _ := profiles.ProfileFiles(profilesDir, name)
-		fileCount := len(files)
+		targetCount := profiles.ProfileTargetCount(profilesDir, name)
 
 		label := name
-		tags := []string{fmt.Sprintf("%d file(s)", fileCount)}
+		tags := []string{fmt.Sprintf("%d target(s)", targetCount)}
 		if name == active {
 			tags = append(tags, "active")
 		}
@@ -1229,9 +1193,11 @@ func runProfileCreate(cfg *config.ConfigManager, name string) {
 		os.Exit(1)
 	}
 
+	cfg.SaveProfileTargets(name, []string{})
+	cfg.SaveProfileExcludes(name, []string{})
+
 	ui.Success(fmt.Sprintf("Created profile '%s'", name))
-	ui.Detail(fmt.Sprintf("Add overlay files to: %s/%s/", profilesDir, name))
-	ui.Detail("Example: mkdir -p " + profilesDir + "/" + name + "/hypr && cp ~/.config/hypr/animations.conf " + profilesDir + "/" + name + "/hypr/")
+	ui.Detail("Switch to it with: synx --profile " + name)
 	fmt.Println()
 }
 

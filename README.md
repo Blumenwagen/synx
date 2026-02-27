@@ -31,7 +31,7 @@ synx --help                # Full command list
 - **Restore** — pull and restore dotfiles from remote
 - **Status & diff** — see what changed since last sync
 - **Dry-run** — preview operations without touching files
-- **Multi-machine** — per-hostname targets and excludes
+- **Multi-machine** — managed smoothly through independent profiles
 - **Profiles** — named presets for quick config switching
 - **Hooks** — custom pre/post sync and restore scripts
 - **History & rollback** — view commits, time-travel to previous states
@@ -56,7 +56,7 @@ synx --help                # Full command list
 | [Services](https://github.com/Blumenwagen/synx/wiki/Services) | Service state tracking |
 | [Profiles](https://github.com/Blumenwagen/synx/wiki/Profiles) | Config presets & animation switching |
 | [Hooks](https://github.com/Blumenwagen/synx/wiki/Hooks) | Custom sync/restore scripts |
-| [Multi-Machine](https://github.com/Blumenwagen/synx/wiki/Multi-Machine) | Per-hostname overrides |
+| [Multi-Machine](https://github.com/Blumenwagen/synx/wiki/Multi-Machine) | Handling multiple devices via profiles |
 | [Bootstrap](https://github.com/Blumenwagen/synx/wiki/Bootstrap) | New machine provisioning |
 | [Doctor](https://github.com/Blumenwagen/synx/wiki/Doctor) | Health checks & diagnostics |
 
