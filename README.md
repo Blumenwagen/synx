@@ -52,10 +52,6 @@ Requires **git**, the installer will try to install **Go** on it's own but if th
 
 <br>
 
-<div align="center">
-  <b>If you find synx useful, please ⭐ the repo &mdash; it helps others discover it!</b>
-</div>
-
 ## Basic Usage
 
 ```bash
