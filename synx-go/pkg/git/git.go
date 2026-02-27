@@ -32,6 +32,12 @@ func (g *GitManager) Clone(url string, dest string) error {
 	return cmd.Run()
 }
 
+func (g *GitManager) AddRemote(name string, url string) error {
+	cmd := exec.Command("git", "remote", "add", name, url)
+	cmd.Dir = g.RepoDir
+	return cmd.Run()
+}
+
 func (g *GitManager) CurrentBranch() (string, error) {
 	cmd := exec.Command("git", "branch", "--show-current")
 	cmd.Dir = g.RepoDir

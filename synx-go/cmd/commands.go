@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"os"
@@ -22,6 +23,119 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func runInit(cfg *config.ConfigManager, dotfileDir string) {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println()
+	ui.PrintHeader("📦", "SYNX - Setup")
+	fmt.Println()
+
+	ui.Step("Setting up configuration...")
+	fmt.Println()
+
+	if _, err := os.Stat(cfg.SynxConfig); err == nil {
+		ui.Success("Created " + cfg.SynxConfig)
+	} else {
+		ui.Warn("Could not find or create " + cfg.SynxConfig)
+	}
+
+	if _, err := os.Stat(cfg.ExcludeCfg); err == nil {
+		ui.Success("Created " + cfg.ExcludeCfg)
+	} else {
+		ui.Warn("Could not find or create " + cfg.ExcludeCfg)
+	}
+
+	fmt.Println()
+	ui.Step("Dotfiles repository setup")
+	fmt.Println()
+
+	g := git.NewGitManager(dotfileDir)
+	if g.IsRepo() {
+		ui.Detail("○ Repository already exists at " + dotfileDir + ", skipping")
+	} else {
+		fmt.Println(ui.StyleBold.Render("Choose an option:"))
+		fmt.Printf("    %s Initialize a new repo in %s\n", ui.StyleCyan.Render("1)"), dotfileDir)
+		fmt.Printf("    %s Clone an existing repo to %s\n", ui.StyleCyan.Render("2)"), dotfileDir)
+		fmt.Printf("    %s Skip\n", ui.StyleCyan.Render("3)"))
+		fmt.Println()
+		fmt.Print("  Enter choice [1/2/3]: ")
+
+		var choice string
+		fmt.Scanln(&choice)
+		choice = strings.TrimSpace(choice)
+		fmt.Println()
+
+		switch choice {
+		case "1":
+			os.MkdirAll(dotfileDir, 0755)
+
+			// Initialize repo manually to bypass IsRepo check restrictions
+			cmd := exec.Command("git", "init")
+			cmd.Dir = dotfileDir
+			if err := cmd.Run(); err != nil {
+				ui.Error("Failed to initialize git repo in " + dotfileDir)
+			} else {
+				ui.Success("Initialized git repo in " + dotfileDir)
+				fmt.Println()
+				fmt.Print("  Add remote? [y/N] ")
+
+				var addRemote string
+				fmt.Scanln(&addRemote)
+				addRemote = strings.ToLower(strings.TrimSpace(addRemote))
+				fmt.Println()
+
+				if addRemote == "y" || addRemote == "yes" {
+					fmt.Print("  Remote URL: ")
+					remoteUrl, _ := reader.ReadString('\n')
+					remoteUrl = strings.TrimSpace(remoteUrl)
+
+					if remoteUrl != "" {
+						err := g.AddRemote("origin", remoteUrl)
+						if err != nil {
+							ui.Error("Failed to add remote: " + err.Error())
+						} else {
+							ui.Success("Added remote: " + remoteUrl)
+						}
+					}
+				}
+			}
+		case "2":
+			fmt.Print("  Remote URL to clone: ")
+			cloneUrl, _ := reader.ReadString('\n')
+			cloneUrl = strings.TrimSpace(cloneUrl)
+
+			if cloneUrl != "" {
+				err := g.Clone(cloneUrl, dotfileDir)
+				if err == nil {
+					ui.Success("Cloned to " + dotfileDir)
+				} else {
+					ui.Error("Failed to clone repository")
+				}
+			} else {
+				ui.Warn("No URL provided, skipping")
+			}
+		default:
+			ui.Detail("○ Skipped dotfiles repo setup")
+		}
+	}
+
+	fmt.Println()
+	ui.Success("Setup complete!")
+	fmt.Println()
+	fmt.Println(ui.StyleBold.Render("Quick Start:"))
+	fmt.Printf("  %s              Show all commands\n", ui.StyleCyan.Render("synx --help"))
+	fmt.Printf("  %s              List tracked dotfiles\n", ui.StyleCyan.Render("synx --list"))
+	fmt.Printf("  %s                     Sync to GitHub\n", ui.StyleCyan.Render("synx"))
+	fmt.Printf("  %s           Restore from GitHub\n", ui.StyleCyan.Render("synx --restore"))
+	fmt.Printf("  %s   Create bootstrap config\n", ui.StyleCyan.Render("synx --bootstrap-setup"))
+	fmt.Println()
+	fmt.Println(ui.StyleBold.Render("Configuration:"))
+	fmt.Printf("  Tracked files: %s\n", ui.StyleCyan.Render("~/.config/synx/synx.conf"))
+	fmt.Printf("  Excludes:      %s\n", ui.StyleCyan.Render("~/.config/synx/exclude.conf"))
+	fmt.Printf("  Bootstrap:     %s\n", ui.StyleCyan.Render("~/.config/synx/bootstrap.conf"))
+	fmt.Println()
+}
+
 func init() {
 	rootCmd.Run = func(cmd *cobra.Command, args []string) {
 		if versionFlag {
@@ -35,6 +149,21 @@ func init() {
 			os.Exit(1)
 		}
 		cfg.Load()
+
+		eng, err := sync.NewEngine(cfg)
+		if err != nil {
+			ui.Error(err.Error())
+			os.Exit(1)
+		}
+
+		g := git.NewGitManager(eng.DotfileDir)
+
+		if initFlag || !g.IsRepo() {
+			runInit(cfg, eng.DotfileDir)
+			if initFlag {
+				return
+			}
+		}
 
 		if restoreFlag {
 			runRestore(cfg)
@@ -211,7 +340,11 @@ func runSync(cfg *config.ConfigManager) {
 	ui.Step("Pushing to remote...")
 	branch, _ := g.CurrentBranch()
 
-	if err := g.Push(branch, false); err != nil {
+	hasRemote, err := g.RemoteURL()
+	if err != nil || hasRemote == "" {
+		ui.Warn("No remote configured. Skipping push.")
+		ui.Detail("Run `git remote add origin <url>` in your dotfiles repo to enable remote sync.")
+	} else if err := g.Push(branch, false); err != nil {
 		ui.Error("Push failed")
 		ui.Detail("Check your git remote configuration and credentials")
 		os.Exit(1)

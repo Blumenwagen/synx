@@ -47,12 +47,14 @@ var (
 	remoteDiffFlag    bool
 	updateFlag        bool
 	cleanFlag         bool
+	initFlag          bool
 	versionFlag       bool
 )
 
 func init() {
 
 	rootCmd.Flags().BoolVarP(&restoreFlag, "restore", "r", false, "Restore dotfiles from remote repository")
+	rootCmd.Flags().BoolVar(&initFlag, "init", false, "Initialize synx configuration and dotfiles repository")
 	rootCmd.Flags().BoolVar(&listFlag, "list", false, "List tracked and available dotfiles")
 	rootCmd.Flags().BoolVar(&historyFlag, "history", false, "Show sync history")
 	rootCmd.Flags().IntVar(&rollbackFlag, "rollback", -1, "Rollback to n commits ago (omit n for interactive UI)")
@@ -110,6 +112,12 @@ func customHelp(cmd *cobra.Command, args []string) {
 	fmt.Printf("  %s %s            Exclude a file pattern\n", g("synx"), c("--exclude <path>"))
 	fmt.Printf("  %s %s                      List tracked dotfiles\n", g("synx"), c("--list"))
 	fmt.Printf("  %s %s              Rollback n commits\n", g("synx"), c("--rollback <n>"))
+	fmt.Println()
+
+	fmt.Println(h("SETUP"))
+	fmt.Printf("  %s %s                    Initialize synx and dotfiles repo\n", g("synx"), c("--init"))
+	fmt.Printf("  %s %s           Create bootstrap config\n", g("synx"), c("--bootstrap-setup"))
+	fmt.Printf("  %s %s           Clone & bootstrap from URL\n", g("synx"), c("--bootstrap <url>"))
 	fmt.Println()
 
 	fmt.Println(h("PROFILES"))
