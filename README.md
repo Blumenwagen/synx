@@ -1,7 +1,18 @@
-# SYNX — Dotfile management Tool
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Blumenwagen/synx/main/readme.gif" width="0" height="0"> <!-- preload -->
+  
+  <h1>🚀 SYNX</h1>
+  <p><b>A blazing fast CLI tool for managing dotfiles</b></p>
+  <p><i>Git-based version control • Multi-machine support • Smart profiles • Full system bootstrapping</i></p>
 
-A fast and easy CLI tool for managing dotfiles with git-based version control, multi-machine support, profiles, and experimental full system bootstrapping. 
+  <p>
+    <a href="https://aur.archlinux.org/packages/synx-git"><img src="https://img.shields.io/aur/version/synx-git?color=1793d1&label=AUR&logo=arch-linux&style=for-the-badge" alt="AUR Package"></a>
+    <a href="https://github.com/Blumenwagen/synx/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Blumenwagen/synx?color=blue&style=for-the-badge" alt="License"></a>
+    <img src="https://img.shields.io/github/go-mod/go-version/Blumenwagen/synx?filename=synx-go%2Fgo.mod&style=for-the-badge&logo=go" alt="Go Version">
+  </p>
+</div>
 
+<br>
 <p align="center">
   <img src="readme.gif" alt="Synx Demo execution" width="100%" onerror="this.style.display='none';"> 
 </p>
