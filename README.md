@@ -2,6 +2,10 @@
 
 A fast and easy CLI tool for managing dotfiles with git-based version control, multi-machine support, profiles, and experimental full system bootstrapping. 
 
+<p align="center">
+  <img src="readme.gif" alt="Synx Demo execution" width="100%" onerror="this.style.display='none';"> 
+</p>
+
 ## Quick Start
 
 ```bash
@@ -31,7 +35,6 @@ synx --help                # Full command list
 - **Restore** — pull and restore dotfiles from remote
 - **Status & diff** — see what changed since last sync
 - **Dry-run** — preview operations without touching files
-- **Multi-machine** — managed smoothly through independent profiles
 - **Profiles** — named presets for quick config switching
 - **Hooks** — custom pre/post sync and restore scripts
 - **History & rollback** — view commits, time-travel to previous states
@@ -43,6 +46,36 @@ synx --help                # Full command list
 > [!WARNING]
 > The bootstrap feature is designed for **Arch Linux** and Arch-based distributions.
 > Core syncing should work on any Unix-like system.
+
+## 💡 Real-world Examples
+
+Here is how `synx` looks in practice:
+
+**1. Track a new config file and upload it to GitHub:**
+```bash
+synx --add nvim
+synx # Backs up ~/.config/nvim to dotfiles and pushes it
+```
+
+**2. Setup a completely new laptop:**
+```bash
+git clone https://github.com/my/dotfiles.git ~/dotfiles
+synx -r # Restores all configs and symlinks them to ~/.config
+synx pkg restore # Downloads missing pacman/AUR packages
+synx svc restore # Enables necessary system services
+```
+
+**3. Switch from a "battery-saver" theme to "smooth animations":**
+```bash
+synx --profile smooth # Changes the active profile and reloads Hyprland automatically
+```
+
+## 🔥 Why synx over GNU Stow or a Bare Git Repo?
+
+- **Zero mental overhead:** A bare git repo forces you to manually `git add`, `commit`, and `push` every time you edit a config file. `synx` does all of this automatically in one command.
+- **Explicit tracking:** `stow` blindly symlinks entire directories, meaning you often accidentally backup unnecessary cache files. `synx` only syncs the specific directories/files you explicitly tell it to via `--add`.
+- **System state capture:** `synx` doesn't just manage config files. It seamlessly captures and tracks your installed system packages (pacman/AUR) and enabled systemd services.
+- **Smart Profiles:** Running different configs on your desktop and laptop is painful with standard tools. `synx` lets you create profiles (e.g. `pc`, `laptop`) that act as explicit fallback overrides over your base config.
 
 
 ## 📖 Documentation

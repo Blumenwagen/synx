@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Blumenwagen/synx/pkg/bootstrap"
 	"github.com/Blumenwagen/synx/pkg/config"
@@ -198,7 +199,8 @@ func runSync(cfg *config.ConfigManager) {
 	cfiles, _ := g.ChangedFilesCount()
 	ui.Detail(fmt.Sprintf("Modified: %d file(s)", cfiles))
 
-	err = g.Commit("Update rice via synx")
+	commitMsg := fmt.Sprintf("Update rice via synx - %s", time.Now().Format("2006-01-02 15:04:05"))
+	err = g.Commit(commitMsg)
 	if err != nil {
 		ui.Error("Commit failed")
 		os.Exit(1)
@@ -577,7 +579,8 @@ func runClean(cfg *config.ConfigManager) {
 		if !g.HasChanges() {
 			ui.Success("Removed orphaned items (no git tracking changes needed)")
 		} else {
-			err := g.Commit("Cleaned orphaned dotfiles")
+			commitMsg := fmt.Sprintf("Cleaned orphaned dotfiles - %s", time.Now().Format("2006-01-02 15:04:05"))
+			err := g.Commit(commitMsg)
 			if err != nil {
 				ui.Error("Failed to commit cleanup: " + err.Error())
 			} else {
@@ -629,7 +632,8 @@ func runExclude(cfg *config.ConfigManager, pattern string) {
 			}
 		}
 		if removed > 0 {
-			g.Commit("Exclude: " + pattern)
+			commitMsg := fmt.Sprintf("Exclude %s - %s", pattern, time.Now().Format("2006-01-02 15:04:05"))
+			g.Commit(commitMsg)
 			ui.Success(fmt.Sprintf("Committed exclusion (%d file(s) removed)", removed))
 		}
 	}
