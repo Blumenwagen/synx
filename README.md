@@ -10,7 +10,7 @@ A fast and easy CLI tool for managing dotfiles with git-based version control, m
 
 ### For Arch-Users an AUR build is available at synx-git:
 ```bash
-# use your prefered AUR helper (yay, paur etc.)
+# use your preferred AUR helper (yay, paru etc.)
 yay -S synx-git
 ```
 > [!NOTE]
