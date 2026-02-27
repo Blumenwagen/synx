@@ -78,7 +78,7 @@ synx --help                # Full command list
 | ⏪ **History & rollback** | View commits, time-travel to previous states |
 | 📦 **Package tracking** | Snapshot and restore installed packages (pacman + AUR) |
 | ⚙️ **Service tracking** | Snapshot and restore enabled systemd services |
-| 🚀 **Bootstrap** | Provision a new machine from a declarative config |
+| 🚀 **Bootstrap** | Provision a new machine from a declarative config (experimental) |
 | 🩺 **Doctor** | Health checks and diagnostics |
 
 > [!WARNING]
