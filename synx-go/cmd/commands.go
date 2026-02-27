@@ -294,6 +294,14 @@ func runRestore(cfg *config.ConfigManager) {
 		synxDataDir := eng.DotfileDir + "/.synx"
 		for _, name := range []string{"packages.native", "packages.foreign", "services.system", "services.user"} {
 			src := filepath.Join(synxDataDir, name)
+
+			if cfg.IsProfileTarget(name) {
+				profSrc := filepath.Join(eng.DotfileDir, "profiles", cfg.ActiveProfile, ".synx", name)
+				if _, err := os.Stat(profSrc); err == nil {
+					src = profSrc
+				}
+			}
+
 			if _, err := os.Stat(src); err == nil {
 				copyFileSimple(src, filepath.Join(cfg.ConfigDir, name))
 			}
@@ -815,8 +823,19 @@ func runStatus(cfg *config.ConfigManager) {
 		srcPath := filepath.Join(eng.ConfigDir, target)
 		destPath := filepath.Join(eng.DotfileDir, target)
 
+		isSynxDataFile := false
+		if strings.HasPrefix(target, "packages.") || strings.HasPrefix(target, "services.") {
+			srcPath = filepath.Join(eng.Config.ConfigDir, target)
+			destPath = filepath.Join(eng.DotfileDir, ".synx", target)
+			isSynxDataFile = true
+		}
+
 		if cfg.IsProfileTarget(target) {
-			destPath = filepath.Join(eng.DotfileDir, "profiles", cfg.ActiveProfile, target)
+			if isSynxDataFile {
+				destPath = filepath.Join(eng.DotfileDir, "profiles", cfg.ActiveProfile, ".synx", target)
+			} else {
+				destPath = filepath.Join(eng.DotfileDir, "profiles", cfg.ActiveProfile, target)
+			}
 		}
 
 		if resolved, err := filepath.EvalSymlinks(srcPath); err == nil {
@@ -1123,7 +1142,7 @@ func runProfileApply(cfg *config.ConfigManager, name string) {
 		os.Exit(1)
 	}
 
-	ui.Step(fmt.Sprintf("Syncing current state before profile switch..."))
+	ui.Step("Syncing current state before profile switch...")
 	runSync(cfg)
 
 	if err := profiles.SetActiveProfile(cfg.ConfigDir, name); err != nil {

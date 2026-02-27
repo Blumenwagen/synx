@@ -48,7 +48,10 @@ func NewConfigManager() (*ConfigManager, error) {
 
 func (c *ConfigManager) Load() error {
 	if _, err := os.Stat(c.SynxConfig); os.IsNotExist(err) {
-		defaultTargets := []string{"hypr", "foot", "kitty", "fastfetch", "alacritty"}
+		defaultTargets := []string{
+			"hypr", "foot", "kitty", "fastfetch", "alacritty",
+			"packages.native", "packages.foreign", "services.system", "services.user",
+		}
 		err = c.SaveTargets(defaultTargets)
 		if err != nil {
 			return err

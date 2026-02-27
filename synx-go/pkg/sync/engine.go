@@ -49,8 +49,21 @@ func (e *Engine) SyncToRepo() (*SyncResult, error) {
 		srcPath := filepath.Join(e.ConfigDir, target)
 		destPath := filepath.Join(e.DotfileDir, target)
 
+		// Packages and services reside in ~/.config/synx, not just ~/.config
+		// And in the repo they go to .synx/
+		isSynxDataFile := false
+		if strings.HasPrefix(target, "packages.") || strings.HasPrefix(target, "services.") {
+			srcPath = filepath.Join(e.Config.ConfigDir, target) // e.Config.ConfigDir is ~/.config/synx
+			destPath = filepath.Join(e.DotfileDir, ".synx", target)
+			isSynxDataFile = true
+		}
+
 		if e.Config.IsProfileTarget(target) {
-			destPath = filepath.Join(e.DotfileDir, "profiles", e.Config.ActiveProfile, target)
+			if isSynxDataFile {
+				destPath = filepath.Join(e.DotfileDir, "profiles", e.Config.ActiveProfile, ".synx", target)
+			} else {
+				destPath = filepath.Join(e.DotfileDir, "profiles", e.Config.ActiveProfile, target)
+			}
 		}
 
 		resolvedSrc, err := filepath.EvalSymlinks(srcPath)
@@ -137,7 +150,13 @@ func (e *Engine) SyncToRepo() (*SyncResult, error) {
 		for _, name := range []string{"packages.native", "packages.foreign", "services.system", "services.user"} {
 			src := filepath.Join(e.Config.ConfigDir, name)
 			if _, err := os.Stat(src); err == nil {
-				e.copyFile(src, filepath.Join(synxDataDir, name))
+				if e.Config.IsProfileTarget(name) {
+					profSynxDir := filepath.Join(e.DotfileDir, "profiles", e.Config.ActiveProfile, ".synx")
+					os.MkdirAll(profSynxDir, 0755)
+					e.copyFile(src, filepath.Join(profSynxDir, name))
+				} else {
+					e.copyFile(src, filepath.Join(synxDataDir, name))
+				}
 			}
 		}
 	}
@@ -155,10 +174,22 @@ func (e *Engine) RestoreFromRepo() (*RestoreResult, error) {
 
 	for _, target := range e.Config.GetAllTargets() {
 		srcPath := filepath.Join(e.DotfileDir, target)
-		if e.Config.IsProfileTarget(target) {
-			srcPath = filepath.Join(e.DotfileDir, "profiles", e.Config.ActiveProfile, target)
-		}
 		destPath := filepath.Join(e.ConfigDir, target)
+
+		isSynxDataFile := false
+		if strings.HasPrefix(target, "packages.") || strings.HasPrefix(target, "services.") {
+			srcPath = filepath.Join(e.DotfileDir, ".synx", target)
+			destPath = filepath.Join(e.Config.ConfigDir, target) // e.Config.ConfigDir is ~/.config/synx
+			isSynxDataFile = true
+		}
+
+		if e.Config.IsProfileTarget(target) {
+			if isSynxDataFile {
+				srcPath = filepath.Join(e.DotfileDir, "profiles", e.Config.ActiveProfile, ".synx", target)
+			} else {
+				srcPath = filepath.Join(e.DotfileDir, "profiles", e.Config.ActiveProfile, target)
+			}
+		}
 
 		info, err := os.Stat(srcPath)
 		if os.IsNotExist(err) {
