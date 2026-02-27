@@ -15,12 +15,15 @@ const (
 	PostSync    = "post-sync"
 	PreRestore  = "pre-restore"
 	PostRestore = "post-restore"
+	PreProfile  = "pre-profile"
+	PostProfile = "post-profile"
 )
 
 // RunHook executes a hook script if it exists and is executable.
 // hooksDir is typically ~/.config/synx/hooks/
+// Optional args are passed to the hook script.
 // Returns nil if the hook doesn't exist (not an error).
-func RunHook(hooksDir, hookName string) error {
+func RunHook(hooksDir, hookName string, args ...string) error {
 	scriptPath := filepath.Join(hooksDir, hookName)
 
 	info, err := os.Stat(scriptPath)
@@ -38,7 +41,7 @@ func RunHook(hooksDir, hookName string) error {
 
 	ui.SubStep(fmt.Sprintf("Running %s hook...", hookName))
 
-	cmd := exec.Command(scriptPath)
+	cmd := exec.Command(scriptPath, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

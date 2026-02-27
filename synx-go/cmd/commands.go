@@ -1117,6 +1117,12 @@ func runProfileApply(cfg *config.ConfigManager, name string) {
 		os.Exit(1)
 	}
 
+	hooksDir := filepath.Join(cfg.ConfigDir, "hooks")
+	if err := hooks.RunHook(hooksDir, hooks.PreProfile, name); err != nil {
+		ui.Error("pre-profile hook failed: " + err.Error())
+		os.Exit(1)
+	}
+
 	ui.Step(fmt.Sprintf("Syncing current state before profile switch..."))
 	runSync(cfg)
 
@@ -1142,6 +1148,8 @@ func runProfileApply(cfg *config.ConfigManager, name string) {
 			break
 		}
 	}
+
+	hooks.RunHook(hooksDir, hooks.PostProfile, name)
 
 	fmt.Println()
 	fmt.Printf("%s  %s\n", ui.StyleGreen.Render("✓"), ui.StyleBold.Render("Profile '"+name+"' active"))
