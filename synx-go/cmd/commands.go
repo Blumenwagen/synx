@@ -519,6 +519,7 @@ func runClean(cfg *config.ConfigManager) {
 		"README.md":  true,
 		"LICENSE":    true,
 		"install.sh": true,
+		"profiles":   true,
 	}
 
 	for _, t := range globalTargets {
