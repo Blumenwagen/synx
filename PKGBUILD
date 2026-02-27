@@ -15,7 +15,9 @@ sha256sums=('SKIP')
 
 pkgver() {
   cd "$srcdir/synx"
-  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  local _count=$(git rev-list HEAD -- . ":(exclude)*.md" | wc -l | tr -d ' ')
+  local _hash=$(git rev-parse --short HEAD)
+  printf "v%s.%s" "$_count" "$_hash"
 }
 
 build() {
@@ -29,8 +31,11 @@ build() {
   export GOFLAGS="-buildmode=pie -trimpath -mod=readonly -modcacherw"
 
   # We use the build.sh version extraction, as they did originally
+  # Must run from repo root to match pkgver() count
+  pushd "$srcdir/synx" >/dev/null
   COM_COUNT=$(git rev-list HEAD -- . ":(exclude)*.md" | wc -l | tr -d ' ')
   COM_HASH=$(git rev-parse --short HEAD)
+  popd >/dev/null
   VERSION="v${COM_COUNT}-${COM_HASH}"
 
   go build -ldflags="-X 'github.com/Blumenwagen/synx/cmd.Version=$VERSION' -linkmode external" \
