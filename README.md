@@ -16,6 +16,7 @@ yay -S synx-git
 > [!NOTE]
 > Note that the AUR version does **NOT** support "synx --update", instead you will need to update using your Package Manager of choice.
 
+---
 ### Other Distributions can Install via the install script:
 ```bash
 git clone https://github.com/Blumenwagen/synx.git
