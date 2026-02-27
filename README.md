@@ -10,7 +10,7 @@ cd synx
 ./install.sh
 ```
 
-Requires **Go** and **git**. The installer builds the binary and symlinks it to `/bin/synx`.
+Requires **Go** and **git**.
 
 ## Basic Usage
 
