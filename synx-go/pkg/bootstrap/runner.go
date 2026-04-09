@@ -57,7 +57,11 @@ func (r *Runner) runAurStep() {
 
 	ui.Info(r.Config.AurHelper + " not found. Installing...")
 
-	tmpDir, _ := os.MkdirTemp("", "aur")
+	tmpDir, err := os.MkdirTemp("", "aur")
+	if err != nil {
+		ui.Error("Failed to create temp directory: " + err.Error())
+		return
+	}
 	defer os.RemoveAll(tmpDir)
 
 	url := "https://aur.archlinux.org/" + r.Config.AurHelper + ".git"
@@ -122,7 +126,10 @@ func (r *Runner) runReposStep() {
 
 		if _, err := os.Stat(dest); os.IsNotExist(err) {
 			g := git.NewGitManager(dest)
-			g.Clone(repo.URL, dest)
+			if err := g.Clone(repo.URL, dest); err != nil {
+				ui.Error("Failed to clone " + repo.URL + ": " + err.Error())
+				continue
+			}
 			ui.Success("Cloned to " + dest)
 
 			if repo.Command != "" {

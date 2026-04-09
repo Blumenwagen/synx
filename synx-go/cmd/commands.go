@@ -889,7 +889,7 @@ reviewLoop:
 			cmd.Stdin = os.Stdin
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
-			cmd.Run()
+			_ = cmd.Run() // diff returns non-zero when files differ, expected behavior
 		case "c":
 			break reviewLoop
 		case "q":
@@ -1003,7 +1003,8 @@ func runStatus(cfg *config.ConfigManager) {
 			cmd := exec.Command("diff", "-rq", srcPath, destPath)
 			var out bytes.Buffer
 			cmd.Stdout = &out
-			cmd.Run()
+			cmd.Stderr = &out
+			_ = cmd.Run() // diff returns non-zero when files differ, expected behavior
 
 			diffOutput := strings.TrimSpace(out.String())
 			if diffOutput == "" {
